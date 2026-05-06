@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DayZ-SP</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <p class="server-message" data-server-message>No servers found</p>
+      <div class="server-table-wrap" data-server-table-wrap hidden>
+        <table class="server-table">
+          <thead>
+            <tr>
+              <th data-sort-key="serverName">
+                <button class="sort-button" type="button">Server name</button>
+                <span class="column-resizer" data-column-index="1"></span>
+              </th>
+              <th data-sort-key="port">
+                <button class="sort-button" type="button">Port</button>
+                <span class="column-resizer" data-column-index="2"></span>
+              </th>
+              <th data-sort-key="configFile">
+                <button class="sort-button" type="button">Config file</button>
+                <span class="column-resizer" data-column-index="3"></span>
+              </th>
+              <th data-sort-key="modCount">
+                <button class="sort-button" type="button">Mods</button>
+                <span class="column-resizer" data-column-index="4"></span>
+              </th>
+              <th data-sort-key="modifiedAtMs">
+                <button class="sort-button" type="button">Modified</button>
+              </th>
+            </tr>
+          </thead>
+          <tbody data-server-table-body></tbody>
+        </table>
+      </div>
+    </main>
+    <footer class="status-bar" aria-live="polite">
+      <div class="server-status" title="DayZ Server install status">
+        <span class="server-label">DayZ Server</span>
+        <span
+          class="server-indicator"
+          data-server-indicator
+          aria-label="Checking DayZ Server"
+        ></span>
+      </div>
+    </footer>
+    <script src="./renderer.js"></script>
+  </body>
+</html>
