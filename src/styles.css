@@ -292,6 +292,15 @@ header {
   border-color: rgba(120, 160, 120, 0.18);
 }
 
+.continue-button:disabled,
+.action-button:disabled {
+  background: #222222;
+  color: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.05);
+  cursor: not-allowed;
+  transform: none;
+}
+
 .action-button {
   background: #432929;
 }

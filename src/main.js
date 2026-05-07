@@ -372,6 +372,25 @@ ipcMain.handle("dayz:save-setting", async (_event, key, value) => {
   await saveSettings(settings);
 });
 
+const MAP_STORAGE_PATHS = {
+  chernarus: "mpmissions/dayzOffline.chernarusplus/storage_1",
+  livonia: "mpmissions/dayzOffline.enoch/storage_1",
+  sakhal: "mpmissions/dayzOffline.sakhal/storage_1",
+};
+
+ipcMain.handle("dayz:check-storage", async (_event, map) => {
+  if (!dayzServerWatchPath) {
+    const serverResult = await scanForDayzServer();
+    if (!serverResult.found) return false;
+  }
+
+  const relativePath = MAP_STORAGE_PATHS[map];
+  if (!relativePath) return false;
+
+  const fullPath = path.join(dayzServerWatchPath, relativePath);
+  return await pathExists(fullPath);
+});
+
 ipcMain.handle("dayz:open-external", (_event, url) => {
   console.log("Opening external URL:", url);
   shell.openExternal(url);

@@ -5,6 +5,7 @@ const serverIndicator = document.querySelector("[data-server-indicator]");
 const gameIndicator = document.querySelector("[data-game-indicator]");
 const bgLayers = [document.getElementById("bg-1"), document.getElementById("bg-2")];
 const mapOptions = document.querySelectorAll(".map-option");
+const continueBtn = document.querySelector(".continue-button");
 
 let activeLayerIndex = 0;
 
@@ -13,6 +14,15 @@ const mapBackgrounds = {
   livonia: 'images/livonia.png',
   sakhal: 'images/sakhal.png',
 };
+
+async function updateStorageStatus(map) {
+  if (!continueBtn) return;
+  
+  const hasStorage = await window.appInfo?.checkMapStorage?.(map);
+  console.log(`Storage check for ${map}: ${hasStorage}`);
+  
+  continueBtn.disabled = !hasStorage;
+}
 
 function setBackground(map) {
   const imageUrl = mapBackgrounds[map];
@@ -33,6 +43,9 @@ function setBackground(map) {
   
   // Save selected map to settings
   window.appInfo?.saveSetting?.("selectedMap", map);
+  
+  // Check for storage_1 folder
+  updateStorageStatus(map);
 }
 
 mapOptions.forEach(btn => {
@@ -59,6 +72,9 @@ mapOptions.forEach(btn => {
     }
   });
   activeLayerIndex = savedIndex;
+  
+  // Check for storage_1 for the initial map
+  updateStorageStatus(savedMap);
 })();
 
 function setStatusIndicator(indicator, state, label) {
