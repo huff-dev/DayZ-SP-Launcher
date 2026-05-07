@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, ipcMain } = require("electron");
+const { app, BrowserWindow, Menu, ipcMain, shell } = require("electron");
 const fs = require("fs");
 const fsp = require("fs/promises");
 const path = require("path");
@@ -6,9 +6,16 @@ const os = require("os");
 
 const DAYZ_SERVER_APP_ID = "223350";
 const DAYZ_SERVER_NAMES = ["DayZ Server", "DayZ Dedicated Server"];
+const DAYZ_GAME_APP_ID = "221100";
+const DAYZ_GAME_NAMES = ["DayZ"];
+
 let dayzServerWatcher = null;
 let dayzServerWatchPath = null;
 let dayzServerWatchTimer = null;
+
+let dayzGameWatcher = null;
+let dayzGameWatchPath = null;
+let dayzGameWatchTimer = null;
 
 function unique(paths) {
   return [...new Set(paths.filter(Boolean))];
@@ -70,264 +77,71 @@ async function findSteamLibraries(steamPath) {
   return unique(libraries);
 }
 
-async function findServerBatchFiles(installPath) {
-  try {
-    const entries = await fsp.readdir(installPath, { withFileTypes: true });
-
-    const batchFilePaths = entries
-      .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith(".bat"))
-      .map((entry) => path.join(installPath, entry.name));
-
-    const batchFiles = await Promise.all(batchFilePaths.map(parseServerBatchFile));
-
-    return batchFiles.sort((first, second) => second.modifiedAtMs - first.modifiedAtMs);
-  } catch {
-    return [];
-  }
-}
-
-function stripBatchQuotes(value) {
-  const trimmed = value.trim();
-
-  if (
-    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
-    (trimmed.startsWith("'") && trimmed.endsWith("'"))
-  ) {
-    return trimmed.slice(1, -1).trim();
-  }
-
-  return trimmed;
-}
-
-function parseSetLine(line) {
-  const quotedMatch = line.match(/^set\s+"([^=]+)=(.*)"\s*$/i);
-
-  if (quotedMatch) {
-    return {
-      name: quotedMatch[1].trim(),
-      value: quotedMatch[2].trim()
-    };
-  }
-
-  const match = line.match(/^set\s+([^=\s]+)\s*=\s*(.*)$/i);
-
-  if (!match) {
-    return null;
-  }
-
-  return {
-    name: match[1].trim(),
-    value: match[2].trim()
-  };
-}
-
-function resolveBatchVariables(value, variables, depth = 0) {
-  if (!value || depth > 8) {
-    return value || "";
-  }
-
-  return value.replace(/%([^%]+)%/g, (_match, variableName) => {
-    const key = variableName.toLowerCase();
-
-    if (!variables.has(key)) {
-      return "";
-    }
-
-    return resolveBatchVariables(variables.get(key), variables, depth + 1);
-  });
-}
-
-function getBatchArgument(commandText, name, variables) {
-  const match = commandText.match(new RegExp(`(?:^|\\s)-${name}=("[^"]+"|\\S+)`, "i"));
-
-  if (!match) {
-    return "";
-  }
-
-  return stripBatchQuotes(resolveBatchVariables(match[1], variables));
-}
-
-function splitMods(value) {
-  return stripBatchQuotes(value)
-    .split(";")
-    .map((modName) => modName.trim())
-    .filter(Boolean);
-}
-
-async function parseServerBatchFile(filePath) {
-  const fileName = path.basename(filePath);
-  const stats = await fsp.stat(filePath);
-  const modifiedAtMs = stats.mtimeMs;
-  const modifiedAt = stats.mtime.toISOString();
-
-  try {
-    const content = await fsp.readFile(filePath, "utf8");
-    const variables = new Map();
-    let title = "";
-
-    for (const line of content.split(/\r?\n/)) {
-      const trimmedLine = line.trim();
-
-      if (!trimmedLine || trimmedLine.startsWith("::") || /^rem\s/i.test(trimmedLine)) {
-        continue;
-      }
-
-      const titleMatch = trimmedLine.match(/^title\s+(.+)$/i);
-
-      if (titleMatch && !title) {
-        title = stripBatchQuotes(titleMatch[1]);
-      }
-
-      const setEntry = parseSetLine(trimmedLine);
-
-      if (setEntry) {
-        variables.set(setEntry.name.toLowerCase(), stripBatchQuotes(setEntry.value));
-      }
-    }
-
-    const commandText = content.replace(/\^\s*\r?\n\s*/g, " ");
-    const serverName =
-      resolveBatchVariables(variables.get("servername"), variables) || title || fileName;
-    const port =
-      resolveBatchVariables(variables.get("server_port"), variables) ||
-      getBatchArgument(commandText, "port", variables) ||
-      "";
-    const configFile =
-      resolveBatchVariables(variables.get("config_file"), variables) ||
-      getBatchArgument(commandText, "config", variables) ||
-      "";
-    const modValues = [
-      resolveBatchVariables(variables.get("mod_list"), variables),
-      getBatchArgument(commandText, "mod", variables),
-      getBatchArgument(commandText, "servermod", variables)
-    ];
-    const normalizedMods = new Set();
-
-    for (const modValue of modValues) {
-      for (const modName of splitMods(modValue || "")) {
-        normalizedMods.add(modName.toLowerCase());
-      }
-    }
-
-    return {
-      fileName,
-      filePath,
-      serverName,
-      title,
-      port,
-      configFile,
-      modCount: normalizedMods.size,
-      modifiedAt,
-      modifiedAtMs
-    };
-  } catch {
-    return {
-      fileName,
-      filePath,
-      serverName: fileName,
-      title: "",
-      port: "",
-      configFile: "",
-      modCount: 0,
-      modifiedAt,
-      modifiedAtMs
-    };
-  }
-}
-
-async function findDayzServerInLibrary(libraryPath) {
+async function findAppInLibrary(libraryPath, appId, defaultName) {
   const steamAppsPath = libraryPath.endsWith("steamapps")
     ? libraryPath
     : path.join(libraryPath, "steamapps");
-  const manifestPath = path.join(steamAppsPath, `appmanifest_${DAYZ_SERVER_APP_ID}.acf`);
+  const manifestPath = path.join(steamAppsPath, `appmanifest_${appId}.acf`);
 
   if (!(await pathExists(manifestPath))) {
     return null;
   }
 
   const manifest = parseAppManifest(await fsp.readFile(manifestPath, "utf8"));
-  const installDir = manifest.installDir || DAYZ_SERVER_NAMES[0];
+  const installDir = manifest.installDir || defaultName;
   const installPath = path.join(steamAppsPath, "common", installDir);
   const installed = await pathExists(installPath);
-  const batchFiles = installed ? await findServerBatchFiles(installPath) : [];
 
   return {
-    appId: manifest.appId || DAYZ_SERVER_APP_ID,
-    name: manifest.name || DAYZ_SERVER_NAMES[0],
+    appId: manifest.appId || appId,
+    name: manifest.name || defaultName,
     manifestPath,
     installPath,
-    installed,
-    batchFiles,
-    hasServerBatchFiles: batchFiles.length > 0
+    installed
   };
 }
 
-function broadcastDayzServerUpdate(result) {
+function broadcastUpdate(channel, result) {
   for (const window of BrowserWindow.getAllWindows()) {
-    window.webContents.send("dayz:server-updated", result);
+    window.webContents.send(channel, result);
   }
 }
 
-async function buildDayzServerUpdate(server) {
-  const batchFiles = await findServerBatchFiles(server.installPath);
+async function buildUpdateResult(appInfo) {
+  let hasFrostline = false;
+
+  
+  if (appInfo.appId === DAYZ_GAME_APP_ID) {
+    try {
+      
+      const libraryPath = path.dirname(path.dirname(appInfo.manifestPath));
+      const dlcManifestPath = path.join(libraryPath, "appmanifest_3302480.acf");
+      
+      if (await pathExists(dlcManifestPath)) {
+        hasFrostline = true;
+      } else if (appInfo.manifestPath) {
+        
+        const manifestContent = await fsp.readFile(appInfo.manifestPath, "utf8");
+        if (manifestContent.includes("3302480")) {
+          hasFrostline = true;
+        }
+      }
+    } catch (error) {
+      console.error("Failed to check for Frostline DLC:", error);
+    }
+  }
 
   return {
-    found: server.installed,
-    steamFound: true,
-    server: {
-      ...server,
-      batchFiles,
-      hasServerBatchFiles: batchFiles.length > 0
-    }
+    found: appInfo.installed,
+    hasFrostline,
+    installPath: appInfo.installPath
   };
 }
 
-function stopDayzServerWatcher() {
-  if (dayzServerWatcher) {
-    dayzServerWatcher.close();
-    dayzServerWatcher = null;
-  }
-
-  if (dayzServerWatchTimer) {
-    clearTimeout(dayzServerWatchTimer);
-    dayzServerWatchTimer = null;
-  }
-
-  dayzServerWatchPath = null;
-}
-
-function watchDayzServerDirectory(server) {
-  if (!server?.installed || dayzServerWatchPath === server.installPath) {
-    return;
-  }
-
-  stopDayzServerWatcher();
-  dayzServerWatchPath = server.installPath;
-
-  dayzServerWatcher = fs.watch(server.installPath, (eventType, filename) => {
-    if (filename && !filename.toLowerCase().endsWith(".bat")) {
-      return;
-    }
-
-    clearTimeout(dayzServerWatchTimer);
-    dayzServerWatchTimer = setTimeout(async () => {
-      broadcastDayzServerUpdate(await buildDayzServerUpdate(server));
-    }, 150);
-  });
-
-  dayzServerWatcher.on("error", () => {
-    stopDayzServerWatcher();
-  });
-}
-
-async function scanForDayzServer() {
+async function scanForApp(appId, defaultNames, type) {
   const steamPaths = getSteamCandidates();
-  const checkedSteamPaths = [];
-  const checkedLibraries = [];
 
   for (const steamPath of steamPaths) {
-    checkedSteamPaths.push(steamPath);
-
     if (!(await pathExists(steamPath))) {
       continue;
     }
@@ -338,52 +152,300 @@ async function scanForDayzServer() {
     ]);
 
     for (const libraryPath of libraries) {
-      checkedLibraries.push(libraryPath);
-      const server = await findDayzServerInLibrary(libraryPath);
+      const appInfo = await findAppInLibrary(libraryPath, appId, defaultNames[0]);
 
-      if (server) {
-        const result = {
-          found: server.installed,
-          steamFound: true,
-          server,
-          checkedSteamPaths,
-          checkedLibraries: unique(checkedLibraries)
-        };
-
-        watchDayzServerDirectory(server);
+      if (appInfo) {
+        const result = await buildUpdateResult(appInfo);
+        
+        if (type === "server") {
+          setupServerWatcher(appInfo);
+        } else {
+          setupGameWatcher(appInfo);
+        }
+        
         return result;
       }
     }
-
-    return {
-      found: false,
-      steamFound: true,
-      server: null,
-      checkedSteamPaths,
-      checkedLibraries: unique(checkedLibraries)
-    };
   }
 
   return {
-    found: false,
-    steamFound: false,
-    server: null,
-    checkedSteamPaths,
-    checkedLibraries: unique(checkedLibraries)
+    found: false
   };
 }
 
-ipcMain.handle("dayz:scan-server", scanForDayzServer);
+function setupServerWatcher(appInfo) {
+  if (!appInfo?.installed || dayzServerWatchPath === appInfo.installPath) return;
+  
+  if (dayzServerWatcher) dayzServerWatcher.close();
+  dayzServerWatchPath = appInfo.installPath;
+  
+  dayzServerWatcher = fs.watch(appInfo.installPath, () => {
+    clearTimeout(dayzServerWatchTimer);
+    dayzServerWatchTimer = setTimeout(async () => {
+      broadcastUpdate("dayz:server-updated", await buildUpdateResult(appInfo));
+    }, 150);
+  });
+}
 
-app.on("before-quit", stopDayzServerWatcher);
+const SETTINGS_FILE = path.join(app.getPath("userData"), "settings.json");
+let dayzWorkshopWatcher = null;
+let dayzWorkshopWatchTimer = null;
+let lastModTimes = new Map();
+
+console.log(`Settings file path: ${SETTINGS_FILE}`);
+
+async function getSettings() {
+  try {
+    if (await pathExists(SETTINGS_FILE)) {
+      const data = await fsp.readFile(SETTINGS_FILE, "utf8");
+      const settings = JSON.parse(data);
+      console.log("Loaded settings:", settings);
+      return settings;
+    }
+  } catch (error) {
+    console.error("Failed to read settings:", error);
+  }
+  return {};
+}
+
+async function saveSettings(settings) {
+  try {
+    await fsp.writeFile(SETTINGS_FILE, JSON.stringify(settings, null, 2));
+  } catch (error) {
+    console.error("Failed to save settings:", error);
+  }
+}
+
+async function scanWorkshopMods(gamePath) {
+  const workshopPath = path.join(gamePath, "!Workshop");
+  console.log(`Scanning for mods in: ${workshopPath}`);
+  
+  if (!(await pathExists(workshopPath))) {
+    console.warn(`Workshop directory not found: ${workshopPath}`);
+    return [];
+  }
+
+  try {
+    const files = await fsp.readdir(workshopPath, { withFileTypes: true });
+    console.log(`Found ${files.length} items in Workshop directory`);
+    
+    const mods = [];
+    for (const f of files) {
+      if (!f.name.startsWith("@")) continue;
+      
+      let fullPath = path.join(workshopPath, f.name);
+      let stat;
+      
+      if (f.isDirectory()) {
+        stat = await fsp.stat(fullPath);
+      } else if (f.isSymbolicLink()) {
+        stat = await fsp.stat(fullPath);
+        if (!stat.isDirectory()) continue;
+      } else {
+        continue;
+      }
+      
+      const modName = f.name;
+      const mtime = stat.mtimeMs;
+      const isNew = !lastModTimes.has(modName);
+      const wasUpdated = !isNew && lastModTimes.get(modName) !== mtime;
+      
+      mods.push({ 
+        name: modName,
+        mtime: mtime,
+        updated: wasUpdated
+      });
+      
+      
+      lastModTimes.set(modName, mtime);
+    }
+
+    console.log(`Identified ${mods.length} mod folders (@...)`);
+
+    const settings = await getSettings();
+    const enabledMods = settings.enabledMods || [];
+
+    return mods.map(m => ({
+      name: m.name,
+      enabled: enabledMods.includes(m.name),
+      updated: m.updated
+    }));
+  } catch (error) {
+    console.error("Failed to scan workshop mods:", error);
+    return [];
+  }
+}
+
+function setupWorkshopWatcher(gamePath) {
+  const workshopPath = path.join(gamePath, "!Workshop");
+  
+  if (dayzWorkshopWatcher) {
+    dayzWorkshopWatcher.close();
+  }
+
+  if (fs.existsSync(workshopPath)) {
+    dayzWorkshopWatcher = fs.watch(workshopPath, () => {
+      clearTimeout(dayzWorkshopWatchTimer);
+      dayzWorkshopWatchTimer = setTimeout(async () => {
+        const mods = await scanWorkshopMods(gamePath);
+        broadcastUpdate("dayz:mods-updated", mods);
+      }, 300);
+    });
+  }
+}
+
+function setupGameWatcher(appInfo) {
+  if (!appInfo?.installed || dayzGameWatchPath === appInfo.installPath) return;
+  
+  if (dayzGameWatcher) dayzGameWatcher.close();
+  dayzGameWatchPath = appInfo.installPath;
+  
+  dayzGameWatcher = fs.watch(appInfo.installPath, () => {
+    clearTimeout(dayzGameWatchTimer);
+    dayzGameWatchTimer = setTimeout(async () => {
+      broadcastUpdate("dayz:game-updated", await buildUpdateResult(appInfo));
+    }, 150);
+  });
+
+  
+  setupWorkshopWatcher(appInfo.installPath);
+}
+
+async function scanForDayzServer() {
+  return scanForApp(DAYZ_SERVER_APP_ID, DAYZ_SERVER_NAMES, "server");
+}
+
+async function scanForDayzGame() {
+  return scanForApp(DAYZ_GAME_APP_ID, DAYZ_GAME_NAMES, "game");
+}
+
+ipcMain.handle("dayz:scan-mods", async () => {
+  if (!dayzGameWatchPath) return [];
+  return await scanWorkshopMods(dayzGameWatchPath);
+});
+
+ipcMain.handle("dayz:toggle-mod", async (_event, modName, enabled) => {
+  const settings = await getSettings();
+  let enabledMods = settings.enabledMods || [];
+
+  if (enabled) {
+    if (!enabledMods.includes(modName)) enabledMods.push(modName);
+  } else {
+    enabledMods = enabledMods.filter(name => name !== modName);
+  }
+
+  settings.enabledMods = enabledMods;
+  await saveSettings(settings);
+  
+  
+  if (dayzGameWatchPath) {
+    const mods = await scanWorkshopMods(dayzGameWatchPath);
+    broadcastUpdate("dayz:mods-updated", mods);
+  }
+});
+
+ipcMain.handle("dayz:scan-server", scanForDayzServer);
+ipcMain.handle("dayz:scan-game", scanForDayzGame);
+
+ipcMain.handle("dayz:browse", async () => {
+  const { dialog } = require("electron");
+  const result = await dialog.showOpenDialog({
+    properties: ["openDirectory"],
+    title: "Select DayZ Installation Folder",
+    buttonLabel: "Select"
+  });
+  
+  if (!result.canceled && result.filePaths.length > 0) {
+    return { path: result.filePaths[0] };
+  }
+  return { path: null };
+});
+
+ipcMain.handle("dayz:open-external", (_event, url) => {
+  console.log("Opening external URL:", url);
+  shell.openExternal(url);
+});
+
+ipcMain.handle("dayz:launch", async (_event, dayzServerPath) => {
+  const settings = await getSettings();
+  const enabledMods = settings.enabledMods || [];  
+  if (enabledMods.length === 0) {
+    return { success: false, message: "No mods selected" };
+  }  
+  if (!dayzServerPath || !(await pathExists(dayzServerPath))) {
+    return { success: false, message: "DayZ Server path not found" };
+  }  
+  const workshopPath = path.join(dayzGameWatchPath, "!Workshop");
+  if (!(await pathExists(workshopPath))) {
+    return { success: false, message: "Workshop directory not found" };
+  }  
+  let copied = 0;
+  let skipped = 0;
+  let errors = [];  
+  for (const modName of enabledMods) {
+    
+    const fullModName = modName.startsWith("@") ? modName : "@" + modName;
+    const sourcePath = path.join(workshopPath, fullModName);
+    const destPath = path.join(dayzServerPath, fullModName);    
+    if (!(await pathExists(sourcePath))) {
+      errors.push(`Mod not found: ${fullModName}`);
+      continue;
+    }    
+    try {
+      
+      if (await pathExists(destPath)) {
+        const sourceStat = await fsp.stat(sourcePath);
+        const destStat = await fsp.stat(destPath);
+        
+        
+        if (destStat.mtimeMs >= sourceStat.mtimeMs) {
+          console.log(`Skipped (up to date): ${fullModName}`);
+          skipped++;
+          continue;
+        }
+        
+        
+        await fsp.rm(destPath, { recursive: true, force: true });
+      }      
+      
+      await fsp.cp(sourcePath, destPath, { recursive: true });
+      copied++;
+      console.log(`Copied mod: ${fullModName}`);
+      
+      
+      const sourceKeysPath = path.join(sourcePath, "keys");
+      const destKeysPath = path.join(dayzServerPath, "keys");
+      if (await pathExists(sourceKeysPath)) {
+        try {
+          await fsp.cp(sourceKeysPath, destKeysPath, { recursive: true });
+          console.log(`Copied keys for: ${fullModName}`);
+        } catch (keyError) {
+          console.warn(`Failed to copy keys for ${fullModName}: ${keyError.message}`);
+        }
+      }
+    } catch (error) {
+      errors.push(`Failed to copy ${fullModName}: ${error.message}`);
+    }
+  }  
+  return {
+    success: errors.length ===0,
+    message: `Copied ${copied} mod(s), skipped ${skipped} up to date` + (errors.length >0 ? `. Errors: ${errors.join(", ")}` : ""),
+    errors
+  };
+});
+
+app.on("before-quit", () => {
+  if (dayzServerWatcher) dayzServerWatcher.close();
+  if (dayzGameWatcher) dayzGameWatcher.close();
+  if (dayzWorkshopWatcher) dayzWorkshopWatcher.close();
+});
 
 function createWindow() {
   const mainWindow = new BrowserWindow({
     width: 600,
     height: 600,
-    minWidth: 600,
-    minHeight: 600,
-    maxWidth: 1000,
+    resizable: false,
+    frame: false,
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
@@ -393,6 +455,9 @@ function createWindow() {
   });
 
   mainWindow.loadFile(path.join(__dirname, "index.html"));
+  
+  
+  mainWindow.webContents.openDevTools({ mode: 'detach' });
 }
 
 app.whenReady().then(() => {

@@ -7,45 +7,107 @@
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <main class="app-shell">
-      <p class="server-message" data-server-message>No servers found</p>
-      <div class="server-table-wrap" data-server-table-wrap hidden>
-        <table class="server-table">
-          <thead>
-            <tr>
-              <th data-sort-key="serverName">
-                <button class="sort-button" type="button">Server name</button>
-                <span class="column-resizer" data-column-index="1"></span>
-              </th>
-              <th data-sort-key="port">
-                <button class="sort-button" type="button">Port</button>
-                <span class="column-resizer" data-column-index="2"></span>
-              </th>
-              <th data-sort-key="configFile">
-                <button class="sort-button" type="button">Config file</button>
-                <span class="column-resizer" data-column-index="3"></span>
-              </th>
-              <th data-sort-key="modCount">
-                <button class="sort-button" type="button">Mods</button>
-                <span class="column-resizer" data-column-index="4"></span>
-              </th>
-              <th data-sort-key="modifiedAtMs">
-                <button class="sort-button" type="button">Modified</button>
-              </th>
-            </tr>
-          </thead>
-          <tbody data-server-table-body></tbody>
-        </table>
+    <header class="titlebar">
+      <div id="window-controls">
+        <button id="minimize">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M5 12h14" stroke-width="3" stroke-linecap="round"/>
+          </svg>
+        </button>
+
+        <button id="close">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M6 6l12 12M6 18L18 6" stroke-width="3" stroke-linecap="round"/>
+          </svg>
+        </button>
       </div>
+    </header>
+    <div class="background-container">
+      <div class="background-layer" id="bg-1"></div>
+      <div class="background-layer" id="bg-2"></div>
+    </div>
+    <main class="app-shell">
+      <section class="top-section">
+        <nav class="map-selector">
+          <button class="map-option active" data-map="chernarus">Chernarus</button>
+          <button class="map-option" data-map="livonia">Livonia</button>
+          <button class="map-option" data-map="sakhal">
+            Sakhal
+            <svg class="lock-icon hidden" viewBox="0 0 24 24" fill="currentColor">
+              <!-- Body -->
+              <rect x="6" y="10" width="12" height="9" rx="2"></rect>
+
+              <!-- Shackle -->
+              <path d="M9 10V8a3 3 0 1 1 6 0v2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </nav>
+      </section>
+
+      <section class="content-container">
+        <section class="mods-container">
+          <h2 class="mods-header">Mods</h2>
+          <table class="mods-table">
+            <thead>
+              <tr>
+                <th class="col-enabled">Enabled</th>
+                <th class="col-name">Name</th>
+              </tr>
+            </thead>
+            <tbody id="mods-list">
+              <!-- Mods will be injected here -->
+            </tbody>
+          </table>
+        </section>
+        <section class="controls-container">
+          <h2 class="controls-header">Options</h2>
+          <div class="control-options">
+            <label class="control-checkbox">
+              <input type="checkbox" id="opt1" />
+              <span>First Person Only</span>
+            </label>
+            <label class="control-checkbox">
+              <input type="checkbox" id="opt2" />
+              <span>Disable Third Person</span>
+            </label>
+            <label class="control-checkbox">
+              <input type="checkbox" id="opt3" />
+              <span>Enable Crosshairs</span>
+            </label>
+            <label class="control-checkbox">
+              <input type="checkbox" id="opt4" />
+              <span>Disable Damage</span>
+            </label>
+          </div>
+          <button class="action-button">Launch DayZ</button>
+        </section>
+      </section>
     </main>
     <footer class="status-bar" aria-live="polite">
-      <div class="server-status" title="DayZ Server install status">
-        <span class="server-label">DayZ Server</span>
-        <span
-          class="server-indicator"
-          data-server-indicator
-          aria-label="Checking DayZ Server"
-        ></span>
+      <div class="status-left">
+        <svg id="loading-spinner" class="hidden" viewBox="0 0 24 24" fill="none" style="width: 12px; height: 12px; animation: spin 1s linear infinite; margin-right: 6px;">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" />
+          <path class="opacity-75" d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+        </svg>
+        <span id="launch-status" style="font-size: 0.65rem; color: rgba(237, 234, 225, 0.6);"></span>
+      </div>
+      <div class="status-right">
+        <div class="server-status" title="DayZ install status">
+          <span class="server-label">DayZ</span>
+          <span
+            class="server-indicator"
+            data-game-indicator
+            aria-label="Checking DayZ"
+          ></span>
+        </div>
+        <div class="server-status" title="DayZ Server install status">
+          <span class="server-label">DayZ Server</span>
+          <span
+            class="server-indicator"
+            data-server-indicator
+            aria-label="Checking DayZ Server"
+          ></span>
+        </div>
       </div>
     </footer>
     <script src="./renderer.js"></script>
