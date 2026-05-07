@@ -22,5 +22,7 @@ contextBridge.exposeInMainWorld("appInfo", {
     return () => ipcRenderer.removeListener("dayz:mods-updated", listener);
   },
   launchDayZ: (serverPath) => ipcRenderer.invoke("dayz:launch", serverPath),
-  browseForDayZ: () => ipcRenderer.invoke("dayz:browse")
+  browseForDayZ: () => ipcRenderer.invoke("dayz:browse"),
+  getSetting: (key) => ipcRenderer.invoke("dayz:get-setting", key),
+  saveSetting: (key, value) => ipcRenderer.invoke("dayz:save-setting", key, value)
 });

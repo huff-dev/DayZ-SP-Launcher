@@ -361,6 +361,17 @@ ipcMain.handle("dayz:browse", async () => {
   return { path: null };
 });
 
+ipcMain.handle("dayz:get-setting", async (_event, key) => {
+  const settings = await getSettings();
+  return settings[key];
+});
+
+ipcMain.handle("dayz:save-setting", async (_event, key, value) => {
+  const settings = await getSettings();
+  settings[key] = value;
+  await saveSettings(settings);
+});
+
 ipcMain.handle("dayz:open-external", (_event, url) => {
   console.log("Opening external URL:", url);
   shell.openExternal(url);
@@ -456,8 +467,6 @@ function createWindow() {
 
   mainWindow.loadFile(path.join(__dirname, "index.html"));
   
-  
-  mainWindow.webContents.openDevTools({ mode: 'detach' });
 }
 
 app.whenReady().then(() => {

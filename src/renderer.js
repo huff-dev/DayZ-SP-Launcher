@@ -20,25 +20,20 @@ function setBackground(map) {
 
   const nextLayerIndex = 1 - activeLayerIndex;
   const currentLayer = bgLayers[activeLayerIndex];
-  const nextLayer = bgLayers[nextLayerIndex];
-
+  const nextLayer = bgLayers[nextLayerIndex];  
   
   nextLayer.style.backgroundImage = `url('${imageUrl}')`;
-  
-  
   nextLayer.classList.add("active");
   currentLayer.classList.remove("active");
 
   activeLayerIndex = nextLayerIndex;
-  
-  
   mapOptions.forEach(opt => {
     opt.classList.toggle("active", opt.dataset.map === map);
   });
+  
+  // Save selected map to settings
+  window.appInfo?.saveSetting?.("selectedMap", map);
 }
-
-
-setBackground("chernarus");
 
 mapOptions.forEach(btn => {
   btn.addEventListener("click", () => {
@@ -46,6 +41,25 @@ mapOptions.forEach(btn => {
     setBackground(btn.dataset.map);
   });
 });
+
+// Load saved map or default to chernarus
+(async () => {
+  const savedMap = await window.appInfo?.getSetting?.("selectedMap") || "chernarus";
+  mapOptions.forEach(opt => {
+    opt.classList.toggle("active", opt.dataset.map === savedMap);
+  });
+  // Set the correct background layer and image
+  const savedIndex = savedMap === "chernarus" ? 0 : 1;
+  bgLayers.forEach((layer, i) => {
+    if (i === savedIndex) {
+      layer.classList.add("active");
+      layer.style.backgroundImage = `url('${mapBackgrounds[savedMap]}')`;
+    } else {
+      layer.classList.remove("active");
+    }
+  });
+  activeLayerIndex = savedIndex;
+})();
 
 function setStatusIndicator(indicator, state, label) {
   if (!indicator) return;
