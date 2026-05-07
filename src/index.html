@@ -58,7 +58,12 @@
               <!-- Mods will be injected here -->
             </tbody>
           </table>
-        </section>
+      </section>
+      <div class="right-column">
+        <div class="workshop-container">
+          <img src="images/workshop.jpg" alt="Workshop" class="workshop-image" />
+          <button class="workshop-button" id="workshop-btn">Visit Workshop</button>
+        </div>
         <section class="controls-container">
           <h2 class="controls-header">Options</h2>
           <div class="control-options">
@@ -79,17 +84,19 @@
               <span>Disable Damage</span>
             </label>
           </div>
-          <button class="action-button">Launch DayZ</button>
         </section>
+        <button class="continue-button">Continue</button>
+        <button class="action-button">New Game</button>
+      </div>
       </section>
     </main>
     <footer class="status-bar" aria-live="polite">
       <div class="status-left">
-        <svg id="loading-spinner" class="hidden" viewBox="0 0 24 24" fill="none" style="width: 12px; height: 12px; animation: spin 1s linear infinite; margin-right: 6px;">
+        <svg id="loading-spinner" class="hidden" viewBox="0 0 24 24" fill="none">
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" />
           <path class="opacity-75" d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
         </svg>
-        <span id="launch-status" style="font-size: 0.65rem; color: rgba(237, 234, 225, 0.6);"></span>
+        <span id="launch-status"></span>
       </div>
       <div class="status-right">
         <div class="server-status" title="DayZ install status">

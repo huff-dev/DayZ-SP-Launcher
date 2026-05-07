@@ -161,6 +161,20 @@ window.appInfo.onDayzServerUpdated(updateServerStatus);
 window.appInfo.onDayzGameUpdated(updateGameStatus);
 window.appInfo.onDayzModsUpdated(renderMods);
 
+document.getElementById("workshop-btn").addEventListener("click", () => {
+  window.location.href = 'steam://openurl/https://steamcommunity.com/app/221100/workshop/';
+});
+
+document.getElementById("workshop-btn").addEventListener("mouseover", (e) => {
+  e.target.style.background = 'rgba(0,0,0,0.9)';
+  e.target.style.color = 'rgba(255,255,255,1)';
+});
+
+document.getElementById("workshop-btn").addEventListener("mouseout", (e) => {
+  e.target.style.background = 'rgba(0,0,0,0.7)';
+  e.target.style.color = 'rgba(255,255,255,0.85)';
+});
+
 document.querySelector(".action-button").addEventListener("click", async () => {
   const serverResult = await window.appInfo.scanForDayzServer();
   if (!serverResult.found) {
@@ -174,18 +188,17 @@ document.querySelector(".action-button").addEventListener("click", async () => {
   
   button.disabled = true;
   button.textContent = "Copying mods...";
-  
+   
   spinner.classList.remove("hidden");
   statusText.textContent = "Copying mods...";
   
   const result = await window.appInfo.launchDayZ(serverResult.installPath);
-  
+   
   button.disabled = false;
   button.textContent = "Launch DayZ";
   spinner.classList.add("hidden");
   statusText.textContent = result.message;
-  
-  
+   
   setTimeout(() => {
     statusText.textContent = "";
   }, 3000);
