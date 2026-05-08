@@ -177,9 +177,7 @@ let isGameRunning = false;
 const SERVER_NAME_ARG = "-serverName=DayZ_SPL";
 
 function killServer() {
-  
-  const killCmd = `wmic process where "name='DayZServer_x64.exe' and commandline like '%%${SERVER_NAME_ARG}%%'" delete`;
-  exec(killCmd, (err) => {
+  exec(`taskkill /IM DayZServer_x64.exe`, (err) => {
     if (err) {
       console.error("Failed to kill server:", err);
     } else {
@@ -412,6 +410,35 @@ ipcMain.handle("dayz:check-storage", async (_event, map) => {
 
   const fullPath = path.join(dayzServerWatchPath, relativePath);
   return await pathExists(fullPath);
+});
+
+ipcMain.handle("dayz:check-cf-folder", async (_event, map) => {
+  if (!dayzServerWatchPath) {
+    const serverResult = await scanForDayzServer();
+    if (!serverResult.found) return false;
+  }
+
+  const relativePath = MAP_STORAGE_PATHS[map];
+  if (!relativePath) return false;
+
+  const fullPath = path.join(dayzServerWatchPath, relativePath, "communityframework");
+  return await pathExists(fullPath);
+});
+
+ipcMain.handle("dayz:check-cf-warning", async (_event, map) => {
+  const settings = await getSettings();
+  const enabledMods = settings.enabledMods || [];
+  const hasCF = enabledMods.some(mod => {
+    const normalized = "@" + mod.name.replace(/\s+/g, '').replace(/^@/, '');
+    return normalized === "@CF";
+  });
+  if (!hasCF) return false;
+
+  const relativePath = MAP_STORAGE_PATHS[map];
+  if (!relativePath) return false;
+
+  const fullPath = path.join(dayzServerWatchPath, relativePath, "communityframework");
+  return !(await pathExists(fullPath));
 });
 
 ipcMain.handle("dayz:delete-storage", async (_event, map) => {

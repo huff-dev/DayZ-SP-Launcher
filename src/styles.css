@@ -277,7 +277,7 @@ header {
   color: rgba(237, 234, 225, 0.6);
   border: none;
   background: none;
-  padding: 0 4px;
+  padding: 0 10px;
 }
 
 .col-enabled {
@@ -477,7 +477,7 @@ input[type="checkbox"] {
 .option-item {
   display: flex;
   align-items: center;
-  padding: 0 4px;
+  padding: 0 10px;
 }
 
 .option-label {
@@ -485,6 +485,7 @@ input[type="checkbox"] {
   color: rgba(237, 234, 225, 0.6);
   font-family: 'Consolas', 'Courier New', monospace;
   cursor: pointer;
+  margin-left: 12px;
 }
 
 #loading-spinner {

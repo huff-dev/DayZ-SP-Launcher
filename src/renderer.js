@@ -144,17 +144,12 @@ function renderMods(mods) {
       window.appInfo.toggleMod({ name: mod.name, folderName: mod.folderName }, checkbox.checked);
     });
     enabledCell.appendChild(checkbox);
-    
+
     const nameCell = document.createElement("td");
     nameCell.className = "col-name";
     const displayName = mod.name.startsWith("@") ? mod.name.slice(1) : mod.name;
     nameCell.textContent = displayName;
-    
-    
-    if (mod.updated) {
-      row.title = "Recently updated";
-    }
-    
+
     row.appendChild(enabledCell);
     row.appendChild(nameCell);
     modsList.appendChild(row);
@@ -203,6 +198,24 @@ const confirmContainer = document.getElementById("new-game-confirm");
 const confirmProceedBtn = document.getElementById("confirm-proceed");
 const confirmCancelBtn = document.getElementById("confirm-cancel");
 
+const cfConfirmContainer = document.getElementById("cf-confirm");
+const cfProceedBtn = document.getElementById("cf-proceed");
+const cfCancelBtn = document.getElementById("cf-cancel");
+
+function showConfirmDialog(container, proceedBtn, cancelBtn) {
+  return new Promise(resolve => {
+    container.classList.remove("hidden");
+    proceedBtn.onclick = () => {
+      container.classList.add("hidden");
+      resolve(true);
+    };
+    cancelBtn.onclick = () => {
+      container.classList.add("hidden");
+      resolve(false);
+    };
+  });
+}
+
 async function handleLaunch(isNewGame = false, forceDelete = false) {
   const activeMap = document.querySelector(".map-option.active")?.dataset.map || "chernarus";
   const button = document.querySelector(".action-button");
@@ -228,6 +241,20 @@ async function handleLaunch(isNewGame = false, forceDelete = false) {
   if (isNewGame || forceDelete) {
     statusText.textContent = "Wiping previous save...";
     await window.appInfo.deleteMapStorage(activeMap);
+  }
+
+  
+  if (!isNewGame && !forceDelete) {
+    const needsWarning = await window.appInfo.checkCFWarning(activeMap);
+    if (needsWarning) {
+      button.disabled = true;
+      if (continueBtn) continueBtn.disabled = true;
+      const confirmed = await showConfirmDialog(cfConfirmContainer, cfProceedBtn, cfCancelBtn);
+      if (!confirmed) {
+        updateButtonsState(isServerRunningLocal);
+        return;
+      }
+    }
   }
 
   const serverResult = await window.appInfo.scanForDayzServer();
