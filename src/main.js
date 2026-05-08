@@ -571,7 +571,11 @@ ipcMain.handle("dayz:launch", async (_event, dayzServerPath, map) => {
   }
 
   try {
-    
+    const profilesPath = path.join(dayzServerPath, "Profiles", "DayzSPL");
+    if (await pathExists(profilesPath)) {
+      await fsp.rm(profilesPath, { recursive: true, force: true });
+    }
+
     await generateServerConfig(dayzServerPath, map);
     await generateServerBatch(dayzServerPath, enabledMods);
     await generateGameBatch(dayzGameWatchPath, enabledMods);

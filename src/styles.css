@@ -94,7 +94,7 @@ header {
   height: 100%;
   overflow: hidden;
   z-index: 5;
-  padding: 0 20px;
+  padding: 10px 20px;
   min-height: 0;
 }
 
@@ -191,9 +191,14 @@ header {
   flex-direction: column;
 }
 
+.button-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
 .continue-button,
 .action-button {
-  margin-top: 10px;
   padding: 6px 10px;
 
   border: 1px solid rgba(237, 234, 225, 0.08);
@@ -206,7 +211,7 @@ header {
   text-transform: uppercase;
 
   cursor: pointer;
-  width: 100%;
+  flex: 1;
 
   transition:
     background 0.18s ease,
