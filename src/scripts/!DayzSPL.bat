@@ -8,7 +8,7 @@ set CONFIG_FILE=DayzSPL.cfg
 set PROFILES_FOLDER=Profiles\DayzSPL
 
 :: Mod Configuration (semicolon separated, no spaces)
-set MOD_LIST=@CF;@Community-Online-Tools;@VPPAdminTools
+set MOD_LIST=
 
 :: Start the server with mods
 start "" /b "DayZServer_x64.exe" ^

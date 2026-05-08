@@ -26,6 +26,7 @@ contextBridge.exposeInMainWorld("appInfo", {
   deleteMapStorage: (map) => ipcRenderer.invoke("dayz:delete-storage", map),
   getSetting: (key) => ipcRenderer.invoke("dayz:get-setting", key),
   saveSetting: (key, value) => ipcRenderer.invoke("dayz:save-setting", key, value),
+  launchDayZLauncher: () => ipcRenderer.invoke("dayz:launch-launcher"),
   minimize: () => ipcRenderer.send("app:minimize"),
   close: () => ipcRenderer.send("app:close"),
   isServerRunning: () => ipcRenderer.invoke("dayz:is-server-running"),

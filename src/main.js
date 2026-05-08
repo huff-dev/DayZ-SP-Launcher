@@ -245,8 +245,9 @@ async function saveSettings(settings) {
 }
 
 async function scanWorkshopMods(gamePath) {
-  const workshopPath = path.join(gamePath, "!Workshop");
-  console.log(`Scanning for mods in: ${workshopPath}`);
+  
+  
+  const workshopPath = path.join(gamePath, "..", "..", "workshop", "content", DAYZ_GAME_APP_ID);
   
   if (!(await pathExists(workshopPath))) {
     console.warn(`Workshop directory not found: ${workshopPath}`);
@@ -254,52 +255,53 @@ async function scanWorkshopMods(gamePath) {
   }
 
   try {
-    const files = await fsp.readdir(workshopPath, { withFileTypes: true });
-    console.log(`Found ${files.length} items in Workshop directory`);
-    
-    const mods = [];
-    for (const f of files) {
-      if (!f.name.startsWith("@")) continue;
-      
-      let fullPath = path.join(workshopPath, f.name);
-      let stat;
-      
-      try {
-        if (f.isDirectory()) {
-          stat = await fsp.stat(fullPath);
-        } else if (f.isSymbolicLink()) {
-          stat = await fsp.stat(fullPath);
-          if (!stat.isDirectory()) continue;
-        } else {
-          continue;
-        }
-      } catch (statError) {
-        console.warn(`Failed to stat mod ${f.name}:`, statError.message);
-        continue;
-      }
-      
-      const modName = f.name;
-      const mtime = stat.mtimeMs;
-      const isNew = !lastModTimes.has(modName);
-      const wasUpdated = !isNew && lastModTimes.get(modName) !== mtime;
-      
-      mods.push({ 
-        name: modName,
-        mtime: mtime,
-        updated: wasUpdated
-      });
-      
-      lastModTimes.set(modName, mtime);
-    }
-
-    console.log(`Identified ${mods.length} valid mod folders`);
-
     const settings = await getSettings();
+    const lastSyncTimes = settings.lastSyncTimes || {}; 
     const enabledMods = settings.enabledMods || [];
+    
+    const files = await fsp.readdir(workshopPath, { withFileTypes: true });
+    const mods = [];
+
+    for (const f of files) {
+      if (!f.isDirectory() && !f.isSymbolicLink()) continue;
+      
+      const modFolderPath = path.join(workshopPath, f.name);
+      const metaPath = path.join(modFolderPath, "meta.cpp");
+      
+      if (!(await pathExists(metaPath))) continue;
+
+      try {
+        const metaContent = await fsp.readFile(metaPath, "utf8");
+        const nameMatch = metaContent.match(/name\s*=\s*"([^"]+)"/);
+        
+        if (!nameMatch) continue;
+        
+        const modName = nameMatch[1];
+        const stat = await fsp.stat(modFolderPath);
+        const sourceMtime = stat.mtimeMs;
+        
+        
+        const lastSync = lastSyncTimes[f.name] || 0;
+        const wasUpdated = sourceMtime > lastSync;
+        
+        mods.push({ 
+          name: modName,
+          folderName: f.name, 
+          fullPath: modFolderPath,
+          mtime: sourceMtime,
+          updated: wasUpdated
+        });
+        
+        lastModTimes.set(modFolderPath, sourceMtime);
+      } catch (e) {
+        console.warn(`Failed to process mod in ${f.name}:`, e.message);
+      }
+    }
 
     return mods.map(m => ({
       name: m.name,
-      enabled: enabledMods.includes(m.name),
+      folderName: m.folderName,
+      enabled: enabledMods.some(em => em.folderName === m.folderName),
       updated: m.updated
     }));
   } catch (error) {
@@ -309,7 +311,7 @@ async function scanWorkshopMods(gamePath) {
 }
 
 function setupWorkshopWatcher(gamePath) {
-  const workshopPath = path.join(gamePath, "!Workshop");
+  const workshopPath = path.join(gamePath, "..", "..", "workshop", "content", DAYZ_GAME_APP_ID);
   
   if (dayzWorkshopWatcher) {
     dayzWorkshopWatcher.close();
@@ -357,14 +359,16 @@ ipcMain.handle("dayz:scan-mods", async () => {
   return await scanWorkshopMods(dayzGameWatchPath);
 });
 
-ipcMain.handle("dayz:toggle-mod", async (_event, modName, enabled) => {
+ipcMain.handle("dayz:toggle-mod", async (_event, modFolder, enabled) => {
   const settings = await getSettings();
-  let enabledMods = settings.enabledMods || [];
+  let enabledMods = settings.enabledMods || []; 
 
   if (enabled) {
-    if (!enabledMods.includes(modName)) enabledMods.push(modName);
+    if (!enabledMods.some(m => m.folderName === modFolder.folderName)) {
+      enabledMods.push({ name: modFolder.name, folderName: modFolder.folderName });
+    }
   } else {
-    enabledMods = enabledMods.filter(name => name !== modName);
+    enabledMods = enabledMods.filter(m => m.folderName !== modFolder.folderName);
   }
 
   settings.enabledMods = enabledMods;
@@ -469,14 +473,13 @@ async function generateServerBatch(dayzServerPath, enabledMods) {
   try {
     let batchContent = await fsp.readFile(templatePath, "utf8");
     
-    
     const formattedMods = enabledMods
-      .map(mod => mod.startsWith("@") ? mod : "@" + mod)
+      .map(mod => "@" + mod.name.replace(/\s+/g, '').replace(/^@/, ''))
       .join(";");
 
     
     batchContent = batchContent.replace(
-      /set MOD_LIST=[^\r\n]*/g,
+      `set MOD_LIST=`,
       `set MOD_LIST=${formattedMods}`
     );
 
@@ -503,13 +506,13 @@ async function generateGameBatch(dayzGamePath, enabledMods) {
     
     
     const formattedMods = enabledMods
-      .map(mod => mod.startsWith("@") ? mod : "@" + mod)
+      .map(mod => "@" + mod.name.replace(/\s+/g, '').replace(/^@/, ''))
       .join(";");
 
     
     batchContent = batchContent.replace(
-      /-mod=[^\r\n^]*/g,
-      `-mod=${formattedMods} `
+      `-mod=`,
+      `-mod=${formattedMods}`
     );
 
     await fsp.writeFile(destBatchPath, batchContent);
@@ -520,7 +523,7 @@ async function generateGameBatch(dayzGamePath, enabledMods) {
   }
 }
 
-async function applyQuickJoin(dayzServerPath, map) {
+async function applyQuickJoin(dayzServerPath, map, value) {
   const missionFolders = {
     chernarus: "dayzOffline.chernarusplus",
     livonia: "dayzOffline.enoch",
@@ -539,15 +542,15 @@ async function applyQuickJoin(dayzServerPath, map) {
       
       content = content.replace(
         /(<var name="TimeLogin" type="0" value=")\d+("\/>)/,
-        "$10$2"
+        `$1${value}$2`
       );
       content = content.replace(
         /(<var name="TimeLogout" type="0" value=")\d+("\/>)/,
-        "$10$2"
+        `$1${value}$2`
       );
 
       await fsp.writeFile(globalsPath, content);
-      console.log(`Applied Quick Join settings to ${globalsPath}`);
+      console.log(`Applied Quick Join (${value}) settings to ${globalsPath}`);
     }
   } catch (error) {
     console.error(`Failed to apply Quick Join to ${globalsPath}:`, error);
@@ -556,7 +559,8 @@ async function applyQuickJoin(dayzServerPath, map) {
 
 ipcMain.handle("dayz:launch", async (_event, dayzServerPath, map) => {
   const settings = await getSettings();
-  const enabledMods = settings.enabledMods || [];  
+  const enabledMods = settings.enabledMods || []; 
+  const lastSyncTimes = settings.lastSyncTimes || {};
   
   if (!dayzServerPath || !(await pathExists(dayzServerPath))) {
     return { success: false, message: "DayZ Server path not found" };
@@ -578,58 +582,79 @@ ipcMain.handle("dayz:launch", async (_event, dayzServerPath, map) => {
     return { success: false, message: `Failed to generate launch files: ${error.message}` };
   }
 
-  const workshopPath = path.join(dayzGameWatchPath, "!Workshop");
+  
+  const workshopPath = path.join(dayzGameWatchPath, "..", "..", "workshop", "content", DAYZ_GAME_APP_ID);
+  const gameWorkshopDest = dayzGameWatchPath;
+  
   if (!(await pathExists(workshopPath))) {
-    return { success: false, message: "Workshop directory not found" };
-  }  
-  let copied = 0;
+    return { success: false, message: "Workshop content directory not found" };
+  }
+
+  let syncedCount = 0;
   let skipped = 0;
   let errors = [];  
-  for (const modName of enabledMods) {
+  
+  for (const mod of enabledMods) {
+    const sourcePath = path.join(workshopPath, mod.folderName);
+    const destFolderName = "@" + mod.name.replace(/\s+/g, '').replace(/^@/, '');
+    const destPathServer = path.join(dayzServerPath, destFolderName);
+    const destPathGame = path.join(gameWorkshopDest, destFolderName);
     
-    const fullModName = modName.startsWith("@") ? modName : "@" + modName;
-    const sourcePath = path.join(workshopPath, fullModName);
-    const destPath = path.join(dayzServerPath, fullModName);    
     if (!(await pathExists(sourcePath))) {
-      errors.push(`Mod not found: ${fullModName}`);
+      errors.push(`Mod folder not found: ${mod.folderName} (${mod.name})`);
       continue;
     }    
+
     try {
+      const sourceStat = await fsp.stat(sourcePath);
+      const sourceMtime = sourceStat.mtimeMs;
+      const lastSync = lastSyncTimes[mod.folderName] || 0;
       
-      if (await pathExists(destPath)) {
-        const sourceStat = await fsp.stat(sourcePath);
-        const destStat = await fsp.stat(destPath);
-        
-        
-        if (destStat.mtimeMs >= sourceStat.mtimeMs) {
-          console.log(`Skipped (up to date): ${fullModName}`);
-          skipped++;
-          continue;
+      const ensureCopy = async (source, dest) => {
+        const exists = await pathExists(dest);
+        if (!exists || sourceMtime > lastSync) {
+          if (exists) {
+            await fsp.rm(dest, { recursive: true, force: true });
+          }
+          await fsp.cp(source, dest, { recursive: true });
+          return true;
         }
-        
-        
-        await fsp.rm(destPath, { recursive: true, force: true });
-      }      
-      
-      await fsp.cp(sourcePath, destPath, { recursive: true });
-      copied++;
-      console.log(`Copied mod: ${fullModName}`);
-      
+        return false;
+      };
+
+      const serverCopied = await ensureCopy(sourcePath, destPathServer);
+      const gameCopied = await ensureCopy(sourcePath, destPathGame);
       
       const sourceKeysPath = path.join(sourcePath, "keys");
       const destKeysPath = path.join(dayzServerPath, "keys");
+      let keysSynced = false;
+
       if (await pathExists(sourceKeysPath)) {
-        try {
+        if (!(await pathExists(destKeysPath))) {
+          await fsp.mkdir(destKeysPath, { recursive: true });
+        }
+        
+        if (sourceMtime > lastSync || serverCopied || gameCopied) {
           await fsp.cp(sourceKeysPath, destKeysPath, { recursive: true });
-          console.log(`Copied keys for: ${fullModName}`);
-        } catch (keyError) {
-          console.warn(`Failed to copy keys for ${fullModName}: ${keyError.message}`);
+          keysSynced = true;
+          console.log(`Synced keys for: ${mod.name}`);
         }
       }
+
+      if (serverCopied || gameCopied || keysSynced) {
+        syncedCount++;
+        lastSyncTimes[mod.folderName] = sourceMtime;
+      } else {
+        skipped++;
+      }
     } catch (error) {
-      errors.push(`Failed to copy ${fullModName}: ${error.message}`);
+      errors.push(`Failed to process ${mod.name}: ${error.message}`);
     }
   }  
+
+  
+  settings.lastSyncTimes = lastSyncTimes;
+  await saveSettings(settings);
 
   
   try {
@@ -644,9 +669,24 @@ ipcMain.handle("dayz:launch", async (_event, dayzServerPath, map) => {
 
   return {
     success: errors.length === 0,
-    message: `Copied ${copied} mod(s), skipped ${skipped} up to date. Server starting...` + (errors.length > 0 ? `. Errors: ${errors.join(", ")}` : ""),
+    message: `Processed ${syncedCount} mod(s), ${skipped} already synced. Server starting...` + (errors.length > 0 ? `. Errors: ${errors.join(", ")}` : ""),
     errors
   };
+});
+
+ipcMain.handle("dayz:launch-launcher", async () => {
+  if (!dayzGameWatchPath) {
+    const gameResult = await scanForDayzGame();
+    if (!gameResult.found) {
+      return { success: false, message: "DayZ game not found" };
+    }
+  }
+  const launcherPath = path.join(dayzGameWatchPath, "DayZLauncher.exe");
+  if (!(await pathExists(launcherPath))) {
+    return { success: false, message: "DayZLauncher.exe not found" };
+  }
+  exec(`start "" "${launcherPath}"`);
+  return { success: true };
 });
 
 ipcMain.on("app:minimize", () => {

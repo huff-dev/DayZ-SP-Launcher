@@ -141,18 +141,17 @@ function renderMods(mods) {
     checkbox.type = "checkbox";
     checkbox.checked = mod.enabled;
     checkbox.addEventListener("change", () => {
-      window.appInfo.toggleMod(mod.name, checkbox.checked);
+      window.appInfo.toggleMod({ name: mod.name, folderName: mod.folderName }, checkbox.checked);
     });
     enabledCell.appendChild(checkbox);
     
     const nameCell = document.createElement("td");
     nameCell.className = "col-name";
     const displayName = mod.name.startsWith("@") ? mod.name.slice(1) : mod.name;
-    nameCell.textContent = displayName + (mod.updated ? " (updated)" : "");
+    nameCell.textContent = displayName;
     
     
     if (mod.updated) {
-      row.style.backgroundColor = "rgba(204, 74, 74, 0.15)";
       row.title = "Recently updated";
     }
     
@@ -194,6 +193,10 @@ window.appInfo.onDayzModsUpdated(renderMods);
 
 document.getElementById("workshop-btn").addEventListener("click", () => {
   window.location.href = 'steam://openurl/https://steamcommunity.com/app/221100/workshop/';
+});
+
+document.getElementById("launcher-btn").addEventListener("click", () => {
+  window.appInfo.launchDayZLauncher();
 });
 
 const confirmContainer = document.getElementById("new-game-confirm");

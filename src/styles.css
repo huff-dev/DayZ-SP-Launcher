@@ -284,6 +284,10 @@ header {
 .col-name {
   font-family: 'Consolas', 'Courier New', monospace;
   letter-spacing: -0.3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 0;
 }
 
 input[type="checkbox"] {
@@ -338,6 +342,28 @@ input[type="checkbox"] {
   align-items: center;
   gap: 6px;
   min-width: 0;
+}
+
+.launcher-btn {
+  background: rgba(29, 29, 29, 0.7);
+
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.65rem;
+  line-height: 1;
+
+  padding: 2px 4px;
+  border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+
+  cursor: pointer;
+  white-space: nowrap;
+
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.launcher-btn:hover {
+  background: rgba(56, 56, 56, 0.7);
+  color: rgba(255, 255, 255, 1);
 }
 
 .server-label {
@@ -405,7 +431,7 @@ input[type="checkbox"] {
   font-size: 0.65rem;
   background: rgba(0,0,0,0.7);
   color: rgba(255,255,255,0.85);
-  border: none;
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 3px;
   cursor: pointer;
   transition: background 0.2s ease, color 0.2s ease;
@@ -425,7 +451,7 @@ input[type="checkbox"] {
   display: flex;
   flex-direction: column;
   padding-bottom: 8px;
-  margin-bottom: 10px;
+  margin-bottom: 6px;
 }
 
 .options-header {
