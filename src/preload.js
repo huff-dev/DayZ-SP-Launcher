@@ -21,9 +21,17 @@ contextBridge.exposeInMainWorld("appInfo", {
     ipcRenderer.on("dayz:mods-updated", listener);
     return () => ipcRenderer.removeListener("dayz:mods-updated", listener);
   },
-  launchDayZ: (serverPath) => ipcRenderer.invoke("dayz:launch", serverPath),
+  launchDayZ: (serverPath, map) => ipcRenderer.invoke("dayz:launch", serverPath, map),
   checkMapStorage: (map) => ipcRenderer.invoke("dayz:check-storage", map),
-  browseForDayZ: () => ipcRenderer.invoke("dayz:browse"),
+  deleteMapStorage: (map) => ipcRenderer.invoke("dayz:delete-storage", map),
   getSetting: (key) => ipcRenderer.invoke("dayz:get-setting", key),
-  saveSetting: (key, value) => ipcRenderer.invoke("dayz:save-setting", key, value)
+  saveSetting: (key, value) => ipcRenderer.invoke("dayz:save-setting", key, value),
+  minimize: () => ipcRenderer.send("app:minimize"),
+  close: () => ipcRenderer.send("app:close"),
+  isServerRunning: () => ipcRenderer.invoke("dayz:is-server-running"),
+  onProcessStatusUpdated: (callback) => {
+    const listener = (_event, status) => callback(status);
+    ipcRenderer.on("dayz:process-status", listener);
+    return () => ipcRenderer.removeListener("dayz:process-status", listener);
+  }
 });

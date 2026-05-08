@@ -6,8 +6,18 @@ const gameIndicator = document.querySelector("[data-game-indicator]");
 const bgLayers = [document.getElementById("bg-1"), document.getElementById("bg-2")];
 const mapOptions = document.querySelectorAll(".map-option");
 const continueBtn = document.querySelector(".continue-button");
+const quickJoinCheckbox = document.getElementById("quick-join");
+
+document.getElementById("minimize")?.addEventListener("click", () => {
+  window.appInfo?.minimize();
+});
+
+document.getElementById("close")?.addEventListener("click", () => {
+  window.appInfo?.close();
+});
 
 let activeLayerIndex = 0;
+let isServerRunningLocal = false;
 
 const mapBackgrounds = {
   chernarus: 'images/chernarus.png',
@@ -19,8 +29,6 @@ async function updateStorageStatus(map) {
   if (!continueBtn) return;
   
   const hasStorage = await window.appInfo?.checkMapStorage?.(map);
-  console.log(`Storage check for ${map}: ${hasStorage}`);
-  
   continueBtn.disabled = !hasStorage;
 }
 
@@ -41,10 +49,10 @@ function setBackground(map) {
     opt.classList.toggle("active", opt.dataset.map === map);
   });
   
-  // Save selected map to settings
+  
   window.appInfo?.saveSetting?.("selectedMap", map);
   
-  // Check for storage_1 folder
+  
   updateStorageStatus(map);
 }
 
@@ -55,13 +63,21 @@ mapOptions.forEach(btn => {
   });
 });
 
-// Load saved map or default to chernarus
+quickJoinCheckbox?.addEventListener("change", () => {
+  window.appInfo?.saveSetting?.("quickJoin", quickJoinCheckbox.checked);
+});
+
+
 (async () => {
   const savedMap = await window.appInfo?.getSetting?.("selectedMap") || "chernarus";
+  const quickJoin = await window.appInfo?.getSetting?.("quickJoin") || false;
+  
+  if (quickJoinCheckbox) quickJoinCheckbox.checked = quickJoin;
+
   mapOptions.forEach(opt => {
     opt.classList.toggle("active", opt.dataset.map === savedMap);
   });
-  // Set the correct background layer and image
+  
   const savedIndex = savedMap === "chernarus" ? 0 : 1;
   bgLayers.forEach((layer, i) => {
     if (i === savedIndex) {
@@ -73,7 +89,7 @@ mapOptions.forEach(btn => {
   });
   activeLayerIndex = savedIndex;
   
-  // Check for storage_1 for the initial map
+  
   updateStorageStatus(savedMap);
 })();
 
@@ -99,20 +115,8 @@ function updateGameStatus(result) {
   const lockIcon = sakhalBtn?.querySelector(".lock-icon");
 
   if (sakhalBtn) {
-    if (result.hasFrostline) {
-      
-      sakhalBtn.classList.remove("locked");
-      if (lockIcon) lockIcon.classList.add("hidden");
-    } else {
-      
-      sakhalBtn.classList.add("locked");
-      if (lockIcon) lockIcon.classList.remove("hidden");
-
-      
-      if (sakhalBtn.classList.contains("active")) {
-        setBackground("chernarus");
-      }
-    }
+    sakhalBtn.classList.remove("locked");
+    if (lockIcon) lockIcon.classList.add("hidden");
   }
 }
 
@@ -158,9 +162,6 @@ function renderMods(mods) {
   });
 }
 
-const spinner = document.getElementById("loading-spinner");
-const statusText = document.getElementById("launch-status");
-
 async function scanForInstallations() {
   try {
     const serverResult = await window.appInfo.scanForDayzServer();
@@ -176,7 +177,7 @@ async function scanForInstallations() {
         const mods = await window.appInfo.scanForDayzMods();
         console.log(`Renderer received ${mods.length} mods`);
         renderMods(mods);
-      }, 500);
+      }, 1000);
     } else {
       console.warn("DayZ Game not found, skipping mod scan");
       renderMods([]);
@@ -195,31 +196,111 @@ document.getElementById("workshop-btn").addEventListener("click", () => {
   window.location.href = 'steam://openurl/https://steamcommunity.com/app/221100/workshop/';
 });
 
-document.querySelector(".action-button").addEventListener("click", async () => {
+const confirmContainer = document.getElementById("new-game-confirm");
+const confirmProceedBtn = document.getElementById("confirm-proceed");
+const confirmCancelBtn = document.getElementById("confirm-cancel");
+
+async function handleLaunch(isNewGame = false, forceDelete = false) {
+  const activeMap = document.querySelector(".map-option.active")?.dataset.map || "chernarus";
+  const button = document.querySelector(".action-button");
+  const statusText = document.getElementById("launch-status");
+
+  if (isNewGame && confirmContainer?.classList.contains("hidden")) {
+    
+    if (continueBtn && !continueBtn.disabled) {
+      confirmContainer.classList.remove("hidden");
+      
+      button.disabled = true;
+      continueBtn.disabled = true;
+      return;
+    } else {
+      
+      forceDelete = true;
+    }
+  }
+
+  confirmContainer?.classList.add("hidden");
+
+  
+  if (isNewGame || forceDelete) {
+    statusText.textContent = "Wiping previous save...";
+    await window.appInfo.deleteMapStorage(activeMap);
+  }
+
   const serverResult = await window.appInfo.scanForDayzServer();
   if (!serverResult.found) {
     alert("DayZ Server not found. Please install DayZ Server first.");
+    
+    updateButtonsState(isServerRunningLocal);
     return;
   }
   
-  const button = document.querySelector(".action-button");
   const spinner = document.getElementById("loading-spinner");
-  const statusText = document.getElementById("launch-status");
   
   button.disabled = true;
-  button.textContent = "Copying mods...";
+  if (continueBtn) continueBtn.disabled = true;
+  button.textContent = "Launching...";
    
   spinner.classList.remove("hidden");
-  statusText.textContent = "Copying mods...";
+  statusText.textContent = "Preparing server...";
   
-  const result = await window.appInfo.launchDayZ(serverResult.installPath);
+  const result = await window.appInfo.launchDayZ(serverResult.installPath, activeMap);
    
-  button.disabled = false;
-  button.textContent = "Running";
+  button.disabled = isServerRunningLocal;
+  
+  updateStorageStatus(activeMap);
+  
+  button.textContent = "New Game";
   spinner.classList.add("hidden");
-  statusText.textContent = result.message;
-   
-  setTimeout(() => {
-    statusText.textContent = "";
-  }, 3000);
+  
+  if (!isServerRunningLocal) {
+    statusText.textContent = result.message;
+    setTimeout(() => {
+      if (!isServerRunningLocal) {
+        statusText.textContent = "";
+      } else {
+        statusText.textContent = "DayZ server is running";
+      }
+    }, 3000);
+  }
+}
+
+document.querySelector(".action-button").addEventListener("click", () => handleLaunch(true));
+continueBtn?.addEventListener("click", () => handleLaunch(false));
+
+confirmProceedBtn?.addEventListener("click", () => handleLaunch(false, true));
+confirmCancelBtn?.addEventListener("click", () => {
+  confirmContainer?.classList.add("hidden");
+  
+  updateButtonsState(isServerRunningLocal);
 });
+
+function updateButtonsState(isServerRunning) {
+  isServerRunningLocal = isServerRunning;
+  const newGameBtn = document.querySelector(".action-button");
+  const statusText = document.getElementById("launch-status");
+
+  if (isServerRunning) {
+    newGameBtn.disabled = true;
+    if (continueBtn) continueBtn.disabled = true;
+    statusText.textContent = "DayZ server is running";
+  } else {
+    newGameBtn.disabled = false;
+    
+    const activeMap = document.querySelector(".map-option.active")?.dataset.map || "chernarus";
+    updateStorageStatus(activeMap);
+    if (statusText.textContent === "DayZ server is running") {
+      statusText.textContent = "";
+    }
+  }
+}
+
+window.appInfo.onProcessStatusUpdated((status) => {
+  updateButtonsState(status.running);
+});
+
+
+(async () => {
+  const running = await window.appInfo.isServerRunning();
+  updateButtonsState(running);
+})();

@@ -33,13 +33,6 @@
           <button class="map-option" data-map="livonia">Livonia</button>
           <button class="map-option" data-map="sakhal">
             Sakhal
-            <svg class="lock-icon hidden" viewBox="0 0 24 24" fill="currentColor">
-              <!-- Body -->
-              <rect x="6" y="10" width="12" height="9" rx="2"></rect>
-
-              <!-- Shackle -->
-              <path d="M9 10V8a3 3 0 1 1 6 0v2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
-            </svg>
           </button>
         </nav>
       </section>
@@ -64,29 +57,22 @@
           <img src="images/workshop.jpg" alt="Workshop" class="workshop-image" />
           <button class="workshop-button" id="workshop-btn">Visit Workshop</button>
         </div>
-        <section class="controls-container">
-          <h2 class="controls-header">Options</h2>
-          <div class="control-options">
-            <label class="control-checkbox">
-              <input type="checkbox" id="opt1" />
-              <span>First Person Only</span>
-            </label>
-            <label class="control-checkbox">
-              <input type="checkbox" id="opt2" />
-              <span>Disable Third Person</span>
-            </label>
-            <label class="control-checkbox">
-              <input type="checkbox" id="opt3" />
-              <span>Enable Crosshairs</span>
-            </label>
-            <label class="control-checkbox">
-              <input type="checkbox" id="opt4" />
-              <span>Disable Damage</span>
-            </label>
+        <div class="options-container">
+          <h2 class="options-header">Options</h2>
+          <div class="option-item">
+            <input type="checkbox" id="quick-join" />
+            <label for="quick-join" class="option-label">Quick Join</label>
           </div>
-        </section>
+        </div>
         <button class="continue-button">Continue</button>
         <button class="action-button">New Game</button>
+        <div id="new-game-confirm" class="confirm-container hidden">
+          <p class="confirm-text">Proceeding will wipe previous saves. Are you sure?</p>
+          <div class="confirm-actions">
+            <button id="confirm-proceed" class="mini-button proceed">Proceed</button>
+            <button id="confirm-cancel" class="mini-button cancel">Cancel</button>
+          </div>
+        </div>
       </div>
       </section>
     </main>

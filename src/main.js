@@ -1,13 +1,14 @@
 const { app, BrowserWindow, Menu, ipcMain, shell } = require("electron");
+const { exec } = require("child_process");
 const fs = require("fs");
 const fsp = require("fs/promises");
 const path = require("path");
 const os = require("os");
 
 const DAYZ_SERVER_APP_ID = "223350";
-const DAYZ_SERVER_NAMES = ["DayZ Server", "DayZ Dedicated Server"];
+const DAYZ_SERVER_NAME = "DayZ Server";
 const DAYZ_GAME_APP_ID = "221100";
-const DAYZ_GAME_NAMES = ["DayZ"];
+const DAYZ_GAME_NAME = "DayZ";
 
 let dayzServerWatcher = null;
 let dayzServerWatchPath = null;
@@ -108,28 +109,7 @@ function broadcastUpdate(channel, result) {
 }
 
 async function buildUpdateResult(appInfo) {
-  let hasFrostline = false;
-
-  
-  if (appInfo.appId === DAYZ_GAME_APP_ID) {
-    try {
-      
-      const libraryPath = path.dirname(path.dirname(appInfo.manifestPath));
-      const dlcManifestPath = path.join(libraryPath, "appmanifest_3302480.acf");
-      
-      if (await pathExists(dlcManifestPath)) {
-        hasFrostline = true;
-      } else if (appInfo.manifestPath) {
-        
-        const manifestContent = await fsp.readFile(appInfo.manifestPath, "utf8");
-        if (manifestContent.includes("3302480")) {
-          hasFrostline = true;
-        }
-      }
-    } catch (error) {
-      console.error("Failed to check for Frostline DLC:", error);
-    }
-  }
+  let hasFrostline = true;
 
   return {
     found: appInfo.installed,
@@ -138,7 +118,7 @@ async function buildUpdateResult(appInfo) {
   };
 }
 
-async function scanForApp(appId, defaultNames, type) {
+async function scanForApp(appId, defaultName, type) {
   const steamPaths = getSteamCandidates();
 
   for (const steamPath of steamPaths) {
@@ -152,9 +132,9 @@ async function scanForApp(appId, defaultNames, type) {
     ]);
 
     for (const libraryPath of libraries) {
-      const appInfo = await findAppInLibrary(libraryPath, appId, defaultNames[0]);
+      const appInfo = await findAppInLibrary(libraryPath, appId, defaultName);
 
-      if (appInfo) {
+      if (appInfo && appInfo.installed) {
         const result = await buildUpdateResult(appInfo);
         
         if (type === "server") {
@@ -191,6 +171,54 @@ const SETTINGS_FILE = path.join(app.getPath("userData"), "settings.json");
 let dayzWorkshopWatcher = null;
 let dayzWorkshopWatchTimer = null;
 let lastModTimes = new Map();
+
+let isServerRunning = false;
+let isGameRunning = false;
+const SERVER_NAME_ARG = "-serverName=DayZ_SPL";
+
+function killServer() {
+  
+  const killCmd = `wmic process where "name='DayZServer_x64.exe' and commandline like '%%${SERVER_NAME_ARG}%%'" delete`;
+  exec(killCmd, (err) => {
+    if (err) {
+      console.error("Failed to kill server:", err);
+    } else {
+      console.log("Server process terminated due to game exit.");
+    }
+  });
+}
+
+function checkProcesses() {
+  
+  exec(`wmic process where "name='DayZServer_x64.exe'" get commandline`, (error, stdout) => {
+    const running = !error && stdout.includes(SERVER_NAME_ARG);
+    if (running !== isServerRunning) {
+      isServerRunning = running;
+      broadcastUpdate("dayz:process-status", { running: isServerRunning });
+    }
+  });
+
+  
+  exec(`wmic process where "name='DayZ_x64.exe' or name='DayZ_BE.exe'" get commandline`, (error, stdout) => {
+    
+    const running = !error && stdout.trim().length > 0 && (stdout.includes("DayZ_x64.exe") || stdout.includes("DayZ_BE.exe"));
+    
+    if (isGameRunning && !running) {
+      
+      console.log("DayZ Game exit detected.");
+      if (isServerRunning) {
+        killServer();
+      }
+    }
+    
+    isGameRunning = running;
+  });
+}
+
+
+setInterval(checkProcesses, 2000);
+
+ipcMain.handle("dayz:is-server-running", () => isServerRunning);
 
 console.log(`Settings file path: ${SETTINGS_FILE}`);
 
@@ -236,12 +264,17 @@ async function scanWorkshopMods(gamePath) {
       let fullPath = path.join(workshopPath, f.name);
       let stat;
       
-      if (f.isDirectory()) {
-        stat = await fsp.stat(fullPath);
-      } else if (f.isSymbolicLink()) {
-        stat = await fsp.stat(fullPath);
-        if (!stat.isDirectory()) continue;
-      } else {
+      try {
+        if (f.isDirectory()) {
+          stat = await fsp.stat(fullPath);
+        } else if (f.isSymbolicLink()) {
+          stat = await fsp.stat(fullPath);
+          if (!stat.isDirectory()) continue;
+        } else {
+          continue;
+        }
+      } catch (statError) {
+        console.warn(`Failed to stat mod ${f.name}:`, statError.message);
         continue;
       }
       
@@ -256,11 +289,10 @@ async function scanWorkshopMods(gamePath) {
         updated: wasUpdated
       });
       
-      
       lastModTimes.set(modName, mtime);
     }
 
-    console.log(`Identified ${mods.length} mod folders (@...)`);
+    console.log(`Identified ${mods.length} valid mod folders`);
 
     const settings = await getSettings();
     const enabledMods = settings.enabledMods || [];
@@ -297,6 +329,7 @@ function setupWorkshopWatcher(gamePath) {
 function setupGameWatcher(appInfo) {
   if (!appInfo?.installed || dayzGameWatchPath === appInfo.installPath) return;
   
+  console.log(`Setting up game watcher for: ${appInfo.installPath}`);
   if (dayzGameWatcher) dayzGameWatcher.close();
   dayzGameWatchPath = appInfo.installPath;
   
@@ -312,11 +345,11 @@ function setupGameWatcher(appInfo) {
 }
 
 async function scanForDayzServer() {
-  return scanForApp(DAYZ_SERVER_APP_ID, DAYZ_SERVER_NAMES, "server");
+  return scanForApp(DAYZ_SERVER_APP_ID, DAYZ_SERVER_NAME, "server");
 }
 
 async function scanForDayzGame() {
-  return scanForApp(DAYZ_GAME_APP_ID, DAYZ_GAME_NAMES, "game");
+  return scanForApp(DAYZ_GAME_APP_ID, DAYZ_GAME_NAME, "game");
 }
 
 ipcMain.handle("dayz:scan-mods", async () => {
@@ -346,20 +379,6 @@ ipcMain.handle("dayz:toggle-mod", async (_event, modName, enabled) => {
 
 ipcMain.handle("dayz:scan-server", scanForDayzServer);
 ipcMain.handle("dayz:scan-game", scanForDayzGame);
-
-ipcMain.handle("dayz:browse", async () => {
-  const { dialog } = require("electron");
-  const result = await dialog.showOpenDialog({
-    properties: ["openDirectory"],
-    title: "Select DayZ Installation Folder",
-    buttonLabel: "Select"
-  });
-  
-  if (!result.canceled && result.filePaths.length > 0) {
-    return { path: result.filePaths[0] };
-  }
-  return { path: null };
-});
 
 ipcMain.handle("dayz:get-setting", async (_event, key) => {
   const settings = await getSettings();
@@ -391,20 +410,174 @@ ipcMain.handle("dayz:check-storage", async (_event, map) => {
   return await pathExists(fullPath);
 });
 
-ipcMain.handle("dayz:open-external", (_event, url) => {
-  console.log("Opening external URL:", url);
-  shell.openExternal(url);
+ipcMain.handle("dayz:delete-storage", async (_event, map) => {
+  if (!dayzServerWatchPath) {
+    const serverResult = await scanForDayzServer();
+    if (!serverResult.found) return false;
+  }
+
+  const relativePath = MAP_STORAGE_PATHS[map];
+  if (!relativePath) return false;
+
+  const fullPath = path.join(dayzServerWatchPath, relativePath);
+  try {
+    if (await pathExists(fullPath)) {
+      await fsp.rm(fullPath, { recursive: true, force: true });
+      console.log(`Deleted storage for ${map} at ${fullPath}`);
+    }
+    return true;
+  } catch (error) {
+    console.error(`Failed to delete storage for ${map}:`, error);
+    return false;
+  }
 });
 
-ipcMain.handle("dayz:launch", async (_event, dayzServerPath) => {
+async function generateServerConfig(dayzServerPath, map) {
+  const templatePath = path.join(__dirname, "scripts", "DayzSPL.cfg");
+  const destConfigPath = path.join(dayzServerPath, "DayzSPL.cfg");
+
+  try {
+    let configContent = await fsp.readFile(templatePath, "utf8");
+    
+    const missionTemplates = {
+      chernarus: "dayzOffline.chernarusplus",
+      livonia: "dayzOffline.enoch",
+      sakhal: "dayzOffline.sakhal"
+    };
+
+    const selectedTemplate = missionTemplates[map] || missionTemplates.chernarus;
+    
+    
+    configContent = configContent.replace(
+      /template\s*=\s*"[^"]*";/,
+      `template="${selectedTemplate}";`
+    );
+
+    await fsp.writeFile(destConfigPath, configContent);
+    console.log(`Generated server config for ${map} at ${destConfigPath}`);
+  } catch (error) {
+    console.error("Failed to generate server config:", error);
+    throw error;
+  }
+}
+
+async function generateServerBatch(dayzServerPath, enabledMods) {
+  const templatePath = path.join(__dirname, "scripts", "!DayzSPL.bat");
+  const destBatchPath = path.join(dayzServerPath, "!DayzSPL.bat");
+  const exePath = path.join(dayzServerPath, "DayZServer_x64.exe");
+
+  try {
+    let batchContent = await fsp.readFile(templatePath, "utf8");
+    
+    
+    const formattedMods = enabledMods
+      .map(mod => mod.startsWith("@") ? mod : "@" + mod)
+      .join(";");
+
+    
+    batchContent = batchContent.replace(
+      /set MOD_LIST=[^\r\n]*/g,
+      `set MOD_LIST=${formattedMods}`
+    );
+
+    
+    batchContent = batchContent.replace(
+      /"DayZServer_x64\.exe"/g,
+      `"${exePath}"`
+    );
+
+    await fsp.writeFile(destBatchPath, batchContent);
+    console.log(`Generated server batch with ${enabledMods.length} mods at ${destBatchPath}`);
+  } catch (error) {
+    console.error("Failed to generate server batch:", error);
+    throw error;
+  }
+}
+
+async function generateGameBatch(dayzGamePath, enabledMods) {
+  const templatePath = path.join(__dirname, "scripts", "!Dayz.bat");
+  const destBatchPath = path.join(dayzGamePath, "!Dayz.bat");
+
+  try {
+    let batchContent = await fsp.readFile(templatePath, "utf8");
+    
+    
+    const formattedMods = enabledMods
+      .map(mod => mod.startsWith("@") ? mod : "@" + mod)
+      .join(";");
+
+    
+    batchContent = batchContent.replace(
+      /-mod=[^\r\n^]*/g,
+      `-mod=${formattedMods} `
+    );
+
+    await fsp.writeFile(destBatchPath, batchContent);
+    console.log(`Generated game batch with ${enabledMods.length} mods at ${destBatchPath}`);
+  } catch (error) {
+    console.error("Failed to generate game batch:", error);
+    throw error;
+  }
+}
+
+async function applyQuickJoin(dayzServerPath, map) {
+  const missionFolders = {
+    chernarus: "dayzOffline.chernarusplus",
+    livonia: "dayzOffline.enoch",
+    sakhal: "dayzOffline.sakhal"
+  };
+
+  const folderName = missionFolders[map];
+  if (!folderName) return;
+
+  const globalsPath = path.join(dayzServerPath, "mpmissions", folderName, "db", "globals.xml");
+
+  try {
+    if (await pathExists(globalsPath)) {
+      let content = await fsp.readFile(globalsPath, "utf8");
+      
+      
+      content = content.replace(
+        /(<var name="TimeLogin" type="0" value=")\d+("\/>)/,
+        "$10$2"
+      );
+      content = content.replace(
+        /(<var name="TimeLogout" type="0" value=")\d+("\/>)/,
+        "$10$2"
+      );
+
+      await fsp.writeFile(globalsPath, content);
+      console.log(`Applied Quick Join settings to ${globalsPath}`);
+    }
+  } catch (error) {
+    console.error(`Failed to apply Quick Join to ${globalsPath}:`, error);
+  }
+}
+
+ipcMain.handle("dayz:launch", async (_event, dayzServerPath, map) => {
   const settings = await getSettings();
   const enabledMods = settings.enabledMods || [];  
-  if (enabledMods.length === 0) {
-    return { success: false, message: "No mods selected" };
-  }  
+  
   if (!dayzServerPath || !(await pathExists(dayzServerPath))) {
     return { success: false, message: "DayZ Server path not found" };
-  }  
+  }
+
+  if (!dayzGameWatchPath || !(await pathExists(dayzGameWatchPath))) {
+    return { success: false, message: "DayZ Game path not found" };
+  }
+
+  try {
+    
+    await generateServerConfig(dayzServerPath, map);
+    await generateServerBatch(dayzServerPath, enabledMods);
+    await generateGameBatch(dayzGameWatchPath, enabledMods);
+
+    const timerValue = settings.quickJoin ? 0 : 15;
+    await applyQuickJoin(dayzServerPath, map, timerValue);
+  } catch (error) {
+    return { success: false, message: `Failed to generate launch files: ${error.message}` };
+  }
+
   const workshopPath = path.join(dayzGameWatchPath, "!Workshop");
   if (!(await pathExists(workshopPath))) {
     return { success: false, message: "Workshop directory not found" };
@@ -457,11 +630,33 @@ ipcMain.handle("dayz:launch", async (_event, dayzServerPath) => {
       errors.push(`Failed to copy ${fullModName}: ${error.message}`);
     }
   }  
+
+  
+  try {
+    const serverBatchPath = path.join(dayzServerPath, "!DayzSPL.bat");
+    shell.openPath(serverBatchPath);
+    
+    const gameBatchPath = path.join(dayzGameWatchPath, "!Dayz.bat");
+    shell.openPath(gameBatchPath);
+  } catch (launchError) {
+    errors.push(`Failed to execute batch files: ${launchError.message}`);
+  }
+
   return {
-    success: errors.length ===0,
-    message: `Copied ${copied} mod(s), skipped ${skipped} up to date` + (errors.length >0 ? `. Errors: ${errors.join(", ")}` : ""),
+    success: errors.length === 0,
+    message: `Copied ${copied} mod(s), skipped ${skipped} up to date. Server starting...` + (errors.length > 0 ? `. Errors: ${errors.join(", ")}` : ""),
     errors
   };
+});
+
+ipcMain.on("app:minimize", () => {
+  const win = BrowserWindow.getFocusedWindow();
+  if (win) win.minimize();
+});
+
+ipcMain.on("app:close", () => {
+  const win = BrowserWindow.getFocusedWindow();
+  if (win) win.close();
 });
 
 app.on("before-quit", () => {
