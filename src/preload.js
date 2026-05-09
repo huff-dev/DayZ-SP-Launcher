@@ -42,6 +42,13 @@ contextBridge.exposeInMainWorld("appInfo", {
   savePreset: (filename) => ipcRenderer.invoke("dayz:save-preset", filename),
   deletePreset: (filename) => ipcRenderer.invoke("dayz:delete-preset", filename),
   checkPresetDirty: (filename) => ipcRenderer.invoke("dayz:check-preset-dirty", filename),
+  checkUpdate: () => ipcRenderer.invoke("dayz:check-update"),
+  openExternal: (url) => ipcRenderer.invoke("dayz:open-external", url),
+  onUpdateAvailable: (callback) => {
+    const listener = (_event, info) => callback(info);
+    ipcRenderer.on("dayz:update-available", listener);
+    return () => ipcRenderer.removeListener("dayz:update-available", listener);
+  },
   onPresetsUpdated: (callback) => {
     const listener = (_event, presets) => callback(presets);
     ipcRenderer.on("dayz:presets-updated", listener);

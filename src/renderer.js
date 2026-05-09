@@ -8,6 +8,24 @@ const mapOptions = document.querySelectorAll(".map-option");
 const continueBtn = document.querySelector(".continue-button");
 const quickJoinCheckbox = document.getElementById("quick-join");
 
+const updateLink = document.getElementById("update-link");
+window.appInfo.checkUpdate().then(result => {
+  if (result?.available) {
+    updateLink.classList.remove("hidden");
+    updateLink.dataset.url = result.url;
+  }
+});
+window.appInfo.onUpdateAvailable((info) => {
+  if (info?.available) {
+    updateLink.classList.remove("hidden");
+    updateLink.dataset.url = info.url;
+  }
+});
+updateLink?.addEventListener("click", (e) => {
+  e.preventDefault();
+  if (updateLink.dataset.url) window.appInfo.openExternal(updateLink.dataset.url);
+});
+
 document.getElementById("minimize")?.addEventListener("click", () => {
   window.appInfo?.minimize();
 });
@@ -402,7 +420,10 @@ function renderPresets(presets) {
     window.appInfo.applyPreset(presets[0].filename);
   } else if (selectedPreset && !currentPresetFilename) {
     const match = presets.find(p => p.name === selectedPreset);
-    if (match) currentPresetFilename = match.filename;
+    if (match) {
+      currentPresetFilename = match.filename;
+      currentPresetIsDefault = match.isDefault || false;
+    }
   }
 
   updateSaveBtn();

@@ -4,6 +4,41 @@ const fs = require("fs");
 const fsp = require("fs/promises");
 const path = require("path");
 const os = require("os");
+const https = require("https");
+
+const APP_VERSION = app.getVersion();
+
+function compareVersions(a, b) {
+  const pa = a.split(".").map(Number);
+  const pb = b.split(".").map(Number);
+  for (let i = 0; i < 3; i++) {
+    const diff = (pa[i] || 0) - (pb[i] || 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+}
+
+function checkForUpdates() {
+  return new Promise((resolve) => {
+    https.get("https://api.github.com/repos/huff-dev/DayZ-SP-Launcher/releases/latest", {
+      headers: { "User-Agent": "DayZ-SP" }
+    }, (res) => {
+      let data = "";
+      res.on("data", chunk => data += chunk);
+      res.on("end", () => {
+        try {
+          const release = JSON.parse(data);
+          const latestTag = (release.tag_name || "").replace(/^v/, "");
+          if (!latestTag) return resolve({ available: false });
+          const downloadUrl = release.assets?.[0]?.browser_download_url || release.html_url;
+          resolve({ available: compareVersions(latestTag, APP_VERSION) > 0, version: latestTag, url: downloadUrl });
+        } catch {
+          resolve({ available: false });
+        }
+      });
+    }).on("error", () => resolve({ available: false }));
+  });
+}
 
 const DAYZ_SERVER_APP_ID = "223350";
 const DAYZ_SERVER_NAME = "DayZ Server";
@@ -637,6 +672,14 @@ ipcMain.handle("dayz:check-preset-dirty", async (_event, filename) => {
   } catch {
     return { dirty: false };
   }
+});
+
+ipcMain.handle("dayz:check-update", async () => {
+  return await checkForUpdates();
+});
+
+ipcMain.handle("dayz:open-external", async (_event, url) => {
+  shell.openExternal(url);
 });
 
 ipcMain.handle("dayz:scan-server", scanForDayzServer);
