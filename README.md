@@ -24,6 +24,7 @@
 - **Preset Support** — Import and export presets created using the official DayZ Launcher.
 - **Multi-Map Support** — Seamlessly switch between Chernarus, Livonia, and Sakhal with automated save management.
 - **Quick Join** — Skips the 15-second login timer.
+- **Disable Anti-cheat and VAC checks**.
 
 ## Download
 
