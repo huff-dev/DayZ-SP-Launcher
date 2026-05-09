@@ -16,8 +16,83 @@ document.getElementById("close")?.addEventListener("click", () => {
   window.appInfo?.close();
 });
 
+const searchBtn = document.getElementById("mods-search-btn");
+const searchContainer = document.getElementById("mods-search-container");
+const searchInput = document.getElementById("mods-search-input");
+
+searchBtn?.addEventListener("click", () => {
+  const opening = !searchContainer.classList.contains("open");
+  searchContainer.classList.toggle("open");
+  if (opening) {
+    setTimeout(() => searchInput?.focus(), 200);
+  } else {
+    if (searchInput) {
+      searchInput.value = "";
+      filterMods();
+    }
+  }
+});
+
+searchInput?.addEventListener("input", filterMods);
+
 let activeLayerIndex = 0;
 let isServerRunningLocal = false;
+let allMods = [];
+
+function filterMods() {
+  const query = searchInput?.value.trim().toLowerCase();
+  const filtered = !query ? allMods : allMods.filter(mod => {
+    const displayName = (mod.name.startsWith("@") ? mod.name.slice(1) : mod.name).toLowerCase();
+    return displayName.includes(query);
+  });
+  renderModsList(filtered);
+}
+
+function renderModsList(mods) {
+  modsList.innerHTML = "";
+
+  if (mods.length === 0) {
+    const row = document.createElement("tr");
+    row.innerHTML = `<td colspan="2" style="text-align: center; color: rgba(237, 234, 225, 0.4); padding: 20px;">No mods found in Steam workshop</td>`;
+    modsList.appendChild(row);
+    return;
+  }
+
+  mods.forEach(mod => {
+    const row = document.createElement("tr");
+    if (mod.publishedId) row.id = mod.publishedId;
+
+    const enabledCell = document.createElement("td");
+    enabledCell.className = "col-enabled";
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = mod.enabled;
+    checkbox.addEventListener("change", () => {
+      window.appInfo.toggleMod({ name: mod.name, folderName: mod.folderName }, checkbox.checked);
+      if (selectedPreset) {
+        presetDirty = true;
+        updateLabel();
+      }
+    });
+    enabledCell.appendChild(checkbox);
+
+    const nameCell = document.createElement("td");
+    nameCell.className = "col-name";
+    const displayName = mod.name.startsWith("@") ? mod.name.slice(1) : mod.name;
+    nameCell.textContent = displayName;
+
+    row.appendChild(enabledCell);
+    row.appendChild(nameCell);
+    modsList.appendChild(row);
+  });
+
+  checkDirty();
+}
+
+function renderMods(mods) {
+  allMods = mods;
+  filterMods();
+}
 
 const mapBackgrounds = {
   chernarus: 'images/chernarus.png',
@@ -122,39 +197,235 @@ function updateGameStatus(result) {
 
 const modsList = document.getElementById("mods-list");
 
-function renderMods(mods) {
-  modsList.innerHTML = "";
-  
-  if (mods.length === 0) {
-    const row = document.createElement("tr");
-    row.innerHTML = `<td colspan="2" style="text-align: center; color: rgba(237, 234, 225, 0.4); padding: 20px;">No mods found in Steam workshop</td>`;
-    modsList.appendChild(row);
+const dropdownToggle = document.getElementById("mods-dropdown-toggle");
+const dropdownMenu = document.getElementById("mods-dropdown-menu");
+const dropdownLabel = document.querySelector(".mods-dropdown-label");
+
+let selectedPreset = null;
+let presetDirty = false;
+let currentPresetFilename = null;
+let currentPresetIsDefault = false;
+
+function updateSaveBtn() {
+  const saveBtn = dropdownMenu?.querySelector(".mods-dropdown-btn:first-child");
+  if (saveBtn) saveBtn.disabled = !selectedPreset || currentPresetIsDefault;
+}
+
+function updateLabel() {
+  if (!dropdownLabel) return;
+  if (selectedPreset) {
+    dropdownLabel.textContent = (presetDirty ? "*" : "") + selectedPreset;
+  } else {
+    dropdownLabel.textContent = "presets";
+  }
+}
+
+function selectPreset(name, filename, isDefault) {
+  selectedPreset = name;
+  currentPresetFilename = filename;
+  currentPresetIsDefault = isDefault || false;
+  presetDirty = false;
+  updateLabel();
+  updateSaveBtn();
+  dropdownMenu?.classList.remove("open");
+  window.appInfo.saveSetting("selectedPreset", name);
+}
+
+function checkDirty() {
+  if (!currentPresetFilename) return;
+  window.appInfo.checkPresetDirty(currentPresetFilename).then(result => {
+    if (result.dirty !== presetDirty) {
+      presetDirty = result.dirty;
+      updateLabel();
+    }
+  });
+}
+
+function renderPresets(presets) {
+  dropdownMenu.innerHTML = "";
+
+  const btnRow = document.createElement("div");
+  btnRow.className = "mods-dropdown-btn-row";
+
+  const saveBtn = document.createElement("button");
+  saveBtn.className = "mods-dropdown-btn";
+  saveBtn.textContent = "Save";
+  saveBtn.disabled = true;
+  saveBtn.addEventListener("click", () => {
+    if (currentPresetFilename) {
+      window.appInfo.savePreset(currentPresetFilename);
+      presetDirty = false;
+      updateLabel();
+      dropdownMenu?.classList.remove("open");
+    }
+  });
+  btnRow.appendChild(saveBtn);
+
+  const saveNewBtn = document.createElement("button");
+  saveNewBtn.className = "mods-dropdown-btn";
+  saveNewBtn.textContent = "Save new";
+  btnRow.appendChild(saveNewBtn);
+
+  dropdownMenu.appendChild(btnRow);
+
+  const inputContainer = document.createElement("div");
+  inputContainer.className = "mods-dropdown-input-container";
+
+  const inputRow = document.createElement("div");
+  inputRow.className = "mods-dropdown-input-row";
+
+  const nameInput = document.createElement("input");
+  nameInput.type = "text";
+  nameInput.className = "mods-dropdown-input";
+  nameInput.placeholder = "Preset name...";
+  inputRow.appendChild(nameInput);
+
+  const cancelBtn = document.createElement("button");
+  cancelBtn.className = "mods-dropdown-input-btn";
+  cancelBtn.textContent = "✕";
+  inputRow.appendChild(cancelBtn);
+
+  const confirmBtn = document.createElement("button");
+  confirmBtn.className = "mods-dropdown-input-btn";
+  confirmBtn.textContent = "✓";
+  inputRow.appendChild(confirmBtn);
+
+  inputContainer.appendChild(inputRow);
+
+  const inputDivider = document.createElement("div");
+  inputDivider.className = "mods-dropdown-divider";
+  inputContainer.appendChild(inputDivider);
+
+  dropdownMenu.appendChild(inputContainer);
+
+  function hideInput() {
+    inputContainer.classList.remove("open");
+    setTimeout(() => {
+      updateSaveBtn();
+      saveNewBtn.disabled = false;
+    }, 200);
+    nameInput.value = "";
+    nameInput.classList.remove("mods-dropdown-input-error");
+  }
+
+  cancelBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    hideInput();
+  });
+
+  confirmBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const value = nameInput.value.trim();
+    if (!value) {
+      nameInput.classList.add("mods-dropdown-input-error");
+      setTimeout(() => nameInput.classList.remove("mods-dropdown-input-error"), 1500);
+      return;
+    }
+    window.appInfo.createPreset(value);
+    hideInput();
+  });
+
+  saveNewBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    inputContainer.classList.add("open");
+    saveBtn.disabled = true;
+    saveNewBtn.disabled = true;
+    nameInput.focus();
+  });
+
+  const list = document.createElement("div");
+  list.className = "mods-dropdown-list";
+  dropdownMenu.appendChild(list);
+
+  if (presets.length === 0) {
+    const item = document.createElement("div");
+    item.className = "mods-dropdown-item";
+    item.textContent = "No presets";
+    item.style.opacity = "0.4";
+    item.style.cursor = "default";
+    list.appendChild(item);
     return;
   }
 
-  mods.forEach(mod => {
-    const row = document.createElement("tr");
-    
-    const enabledCell = document.createElement("td");
-    enabledCell.className = "col-enabled";
-    const checkbox = document.createElement("input");
-    checkbox.type = "checkbox";
-    checkbox.checked = mod.enabled;
-    checkbox.addEventListener("change", () => {
-      window.appInfo.toggleMod({ name: mod.name, folderName: mod.folderName }, checkbox.checked);
+  function appendPresetItem(preset) {
+    const row = document.createElement("div");
+    row.className = "mods-dropdown-item-row";
+
+    const label = document.createElement("span");
+    label.className = "mods-dropdown-item-label";
+    label.textContent = preset.name;
+    label.addEventListener("click", () => {
+      selectPreset(preset.name, preset.filename, preset.isDefault);
+      window.appInfo.applyPreset(preset.filename);
     });
-    enabledCell.appendChild(checkbox);
+    row.appendChild(label);
 
-    const nameCell = document.createElement("td");
-    nameCell.className = "col-name";
-    const displayName = mod.name.startsWith("@") ? mod.name.slice(1) : mod.name;
-    nameCell.textContent = displayName;
+    if (!preset.isDefault) {
+      const delBtn = document.createElement("button");
+      delBtn.className = "mods-dropdown-del-btn";
+      delBtn.textContent = "🗑";
+      delBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (preset.filename === currentPresetFilename) {
+          selectedPreset = null;
+          currentPresetFilename = null;
+          presetDirty = false;
+          updateLabel();
+        }
+        window.appInfo.deletePreset(preset.filename);
+      });
+      row.appendChild(delBtn);
+    }
 
-    row.appendChild(enabledCell);
-    row.appendChild(nameCell);
-    modsList.appendChild(row);
-  });
+    list.appendChild(row);
+  }
+
+  const defaultIdx = presets.findIndex(p => p.isDefault);
+  if (defaultIdx !== -1) {
+    const defaultPreset = presets[defaultIdx];
+    appendPresetItem(defaultPreset);
+
+    const divider = document.createElement("div");
+    divider.className = "mods-dropdown-divider";
+    list.appendChild(divider);
+
+    const others = presets.filter((_, i) => i !== defaultIdx);
+    others.forEach(preset => appendPresetItem(preset));
+  } else {
+    presets.forEach(preset => appendPresetItem(preset));
+  }
+
+  if (!selectedPreset && presets.length > 0) {
+    selectPreset(presets[0].name, presets[0].filename, presets[0].isDefault);
+    window.appInfo.applyPreset(presets[0].filename);
+  } else if (selectedPreset && !currentPresetFilename) {
+    const match = presets.find(p => p.name === selectedPreset);
+    if (match) currentPresetFilename = match.filename;
+  }
+
+  updateSaveBtn();
 }
+
+dropdownToggle?.addEventListener("click", (e) => {
+  e.stopPropagation();
+  dropdownMenu.classList.toggle("open");
+});
+
+document.addEventListener("click", (e) => {
+  if (!dropdownMenu?.contains(e.target)) {
+    dropdownMenu?.classList.remove("open");
+  }
+});
+
+window.appInfo.getSetting("selectedPreset").then(saved => {
+  if (saved) {
+    selectedPreset = saved;
+    updateLabel();
+  }
+});
+
+window.appInfo.scanPresets().then(renderPresets);
+window.appInfo.onPresetsUpdated(renderPresets);
 
 async function scanForInstallations() {
   try {

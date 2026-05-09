@@ -39,7 +39,24 @@
 
       <section class="content-container">
         <section class="mods-container">
-          <h2 class="mods-header">Mods</h2>
+          <h2 class="mods-header">
+            <div class="mods-header-top">
+              <button class="mods-search-btn" id="mods-search-btn" aria-label="Search">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="11" cy="11" r="7"></circle>
+                  <line x1="16.65" y1="16.65" x2="21" y2="21"></line>
+                </svg>
+              </button>
+              <span>Mods</span>
+              <div class="mods-header-dropdown">
+                <button class="mods-dropdown-toggle" id="mods-dropdown-toggle"><span class="mods-dropdown-label">presets</span></button>
+                <div class="mods-dropdown-menu" id="mods-dropdown-menu"></div>
+              </div>
+            </div>
+            <div class="mods-search-container" id="mods-search-container">
+              <input type="text" class="mods-search-input" id="mods-search-input" placeholder="Search mods...">
+            </div>
+          </h2>
           <table class="mods-table">
             <thead>
               <tr>

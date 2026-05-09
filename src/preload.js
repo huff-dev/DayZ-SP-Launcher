@@ -35,5 +35,16 @@ contextBridge.exposeInMainWorld("appInfo", {
     const listener = (_event, status) => callback(status);
     ipcRenderer.on("dayz:process-status", listener);
     return () => ipcRenderer.removeListener("dayz:process-status", listener);
+  },
+  scanPresets: () => ipcRenderer.invoke("dayz:scan-presets"),
+  applyPreset: (filename) => ipcRenderer.invoke("dayz:apply-preset", filename),
+  createPreset: (name) => ipcRenderer.invoke("dayz:create-preset", name),
+  savePreset: (filename) => ipcRenderer.invoke("dayz:save-preset", filename),
+  deletePreset: (filename) => ipcRenderer.invoke("dayz:delete-preset", filename),
+  checkPresetDirty: (filename) => ipcRenderer.invoke("dayz:check-preset-dirty", filename),
+  onPresetsUpdated: (callback) => {
+    const listener = (_event, presets) => callback(presets);
+    ipcRenderer.on("dayz:presets-updated", listener);
+    return () => ipcRenderer.removeListener("dayz:presets-updated", listener);
   }
 });

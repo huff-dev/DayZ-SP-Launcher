@@ -249,18 +249,341 @@ header {
 }
 
 .mods-header {
-  margin: 0 0 4px;
-  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  margin: 0 0 6px;
+  padding: 0;
   font-size: 0.65rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 1px;
   color: rgba(237, 234, 225, 0.4);
-  text-align: center;
   position: sticky;
   top: 0;
   background: #111111;
   border-bottom: 1px solid rgba(237, 234, 225, 0.1);
+}
+
+.mods-header-top {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  position: relative;
+}
+
+.mods-header-dropdown {
+  position: absolute;
+  right: 4px;
+}
+
+.mods-search-btn {
+  position: absolute;
+  left: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 24px;
+  height: 24px;
+
+  background: transparent;
+  border: none;
+  padding: 0;
+
+  color: rgba(237, 234, 225, 0.45);
+  cursor: pointer;
+
+  transition:
+    color 0.15s ease,
+    opacity 0.15s ease;
+}
+
+.mods-search-btn svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 3.5;
+}
+
+.mods-search-btn:hover {
+  color: rgba(237, 234, 225, 0.8);
+}
+
+.mods-search-btn:active {
+  opacity: 0.7;
+}
+
+.mods-search-container {
+  max-height: 0;
+  overflow: hidden;
+
+  opacity: 0;
+  transform: translateY(-4px);
+
+  transition:
+    max-height 0.25s ease,
+    opacity 0.18s ease,
+    transform 0.18s ease;
+
+  display: flex;
+  align-items: stretch;
+}
+
+.mods-search-container.open {
+  max-height: 40px;
+
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.mods-search-input {
+  flex: 1;
+  width: 100%;
+  height: 20px;
+
+  box-sizing: border-box;
+  padding: 0 10px;
+
+  background: rgba(237, 234, 225, 0.06);
+  border: none;
+  border-bottom: 1px solid rgba(237, 234, 225, 0.1);
+
+  color: rgba(237, 234, 225, 0.8);
+  font-size: 0.6rem;
+  font-family: inherit;
+  outline: none;
+
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.mods-search-input::placeholder {
+  color: rgba(237, 234, 225, 0.3);
+}
+
+.mods-search-input:focus {
+  background: rgba(237, 234, 225, 0.1);
+}
+
+.mods-dropdown-toggle {
+  background: none;
+  border: none;
+  border-radius: 3px;
+  color: rgba(237, 234, 225, 0.4);
+  cursor: pointer;
+  font-size: 0.6rem;
+  line-height: 1;
+  padding: 2px 1px;
+  width: 80px;
+  letter-spacing: 0;
+  text-transform: none;
+  font-family: inherit;
+  display: flex;
+  align-items: center;
+  /* gap: 1px; */
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.mods-dropdown-toggle:hover {
+  color: rgba(237, 234, 225, 0.8);
+  border-color: rgba(237, 234, 225, 0.3);
+}
+
+.mods-dropdown-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  width: 80px;
+}
+
+.mods-dropdown-menu {
+  display: none;
+  position: absolute;
+  right: 0;
+  top: 100%;
+  width: 150px;
+  min-width: 150px;
+  background: #1a1a1a;
+  border: 1px solid rgba(237, 234, 225, 0.1);
+  border-radius: 4px;
+  padding: 4px 0;
+  z-index: 10;
+  margin-top: 4px;
+}
+
+.mods-dropdown-menu.open {
+  display: block;
+}
+
+.mods-dropdown-item {
+  padding: 4px 8px;
+  font-size: 0.5rem;
+  color: rgba(237, 234, 225, 0.6);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mods-dropdown-item:hover {
+  background: rgba(237, 234, 225, 0.08);
+  color: rgba(237, 234, 225, 0.9);
+}
+
+.mods-dropdown-btn-row {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+}
+
+.mods-dropdown-list {
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.mods-dropdown-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.mods-dropdown-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.mods-dropdown-list::-webkit-scrollbar-thumb {
+  background: rgba(237, 234, 225, 0.15);
+  border-radius: 2px;
+}
+
+.mods-dropdown-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(237, 234, 225, 0.3);
+}
+
+.mods-dropdown-item-row {
+  display: flex;
+  align-items: center;
+}
+
+.mods-dropdown-item-label {
+  flex: 1;
+  padding: 4px 8px;
+  font-size: 0.5rem;
+  color: rgba(237, 234, 225, 0.6);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mods-dropdown-item-label:hover {
+  background: rgba(237, 234, 225, 0.08);
+  color: rgba(237, 234, 225, 0.9);
+}
+
+.mods-dropdown-del-btn {
+  background: none;
+  border: none;
+  color: rgba(237, 234, 225, 0.3);
+  cursor: pointer;
+  font-size: 0.55rem;
+  line-height: 1;
+  padding: 4px 6px;
+}
+
+.mods-dropdown-del-btn:hover {
+  color: rgba(200, 60, 60, 0.7);
+}
+
+.mods-dropdown-input-container {
+  padding: 4px 4px 0;
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: max-height 0.2s ease, opacity 0.2s ease;
+}
+
+.mods-dropdown-input-container.open {
+  max-height: 50px;
+  opacity: 1;
+}
+
+.mods-dropdown-input-row {
+  display: flex;
+  gap: 4px;
+}
+
+.mods-dropdown-input {
+  flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
+  background: rgba(237, 234, 225, 0.06);
+  border: 1px solid rgba(237, 234, 225, 0.15);
+  border-radius: 3px;
+  color: rgba(237, 234, 225, 0.8);
+  font-size: 0.55rem;
+  font-family: inherit;
+  padding: 3px 6px;
+  outline: none;
+}
+
+.mods-dropdown-input:focus {
+  border-color: rgba(237, 234, 225, 0.3);
+}
+
+.mods-dropdown-input::placeholder {
+  color: rgba(237, 234, 225, 0.3);
+}
+
+.mods-dropdown-input-error {
+  border-color: rgba(200, 60, 60, 0.6) !important;
+}
+
+.mods-dropdown-input-btn {
+  background: none;
+  border: 1px solid rgba(237, 234, 225, 0.12);
+  border-radius: 3px;
+  color: rgba(237, 234, 225, 0.5);
+  cursor: pointer;
+  font-size: 0.55rem;
+  line-height: 1;
+  padding: 3px 5px;
+  font-family: inherit;
+}
+
+.mods-dropdown-input-btn:hover {
+  background: rgba(237, 234, 225, 0.08);
+  color: rgba(237, 234, 225, 0.9);
+}
+
+.mods-dropdown-btn {
+  flex: 1;
+  background: rgba(237, 234, 225, 0.06);
+  border: 1px solid rgba(237, 234, 225, 0.12);
+  border-radius: 3px;
+  color: rgba(237, 234, 225, 0.6);
+  cursor: pointer;
+  font-size: 0.5rem;
+  font-family: inherit;
+  padding: 3px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.mods-dropdown-btn:hover:not(:disabled) {
+  background: rgba(237, 234, 225, 0.12);
+  color: rgba(237, 234, 225, 0.9);
+}
+
+.mods-dropdown-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.mods-dropdown-divider {
+  height: 1px;
+  margin: 5px 0;
+  background: rgba(237, 234, 225, 0.2);
+  border: none;
 }
 
 .mods-table {
