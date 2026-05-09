@@ -1,6 +1,6 @@
 {
   "name": "dayz-sp",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "Electron app scaffold for DayZ-SP.",
   "repository": {
     "type": "git",
