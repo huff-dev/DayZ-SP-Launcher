@@ -833,10 +833,16 @@ input[type="checkbox"] {
   border-top-right-radius: 8px;
 }
 
+.options-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 4px 0 0;
+}
+
 .option-item {
   display: flex;
   align-items: center;
-  padding: 0 10px;
+  justify-content: center;
 }
 
 .option-label {
@@ -844,7 +850,7 @@ input[type="checkbox"] {
   color: rgba(237, 234, 225, 0.6);
   font-family: 'Consolas', 'Courier New', monospace;
   cursor: pointer;
-  margin-left: 12px;
+  /* margin-left: 12px; */
 }
 
 #loading-spinner {

@@ -7,6 +7,7 @@ const bgLayers = [document.getElementById("bg-1"), document.getElementById("bg-2
 const mapOptions = document.querySelectorAll(".map-option");
 const continueBtn = document.querySelector(".continue-button");
 const quickJoinCheckbox = document.getElementById("quick-join");
+const disableBECheckbox = document.getElementById("disable-be");
 
 const updateLink = document.getElementById("update-link");
 window.appInfo.checkUpdate().then(result => {
@@ -160,12 +161,18 @@ quickJoinCheckbox?.addEventListener("change", () => {
   window.appInfo?.saveSetting?.("quickJoin", quickJoinCheckbox.checked);
 });
 
+disableBECheckbox?.addEventListener("change", () => {
+  window.appInfo?.saveSetting?.("disableBE", disableBECheckbox.checked);
+});
+
 
 (async () => {
   const savedMap = await window.appInfo?.getSetting?.("selectedMap") || "chernarus";
   const quickJoin = await window.appInfo?.getSetting?.("quickJoin") || false;
+  const disableBE = await window.appInfo?.getSetting?.("disableBE") || false;
   
   if (quickJoinCheckbox) quickJoinCheckbox.checked = quickJoin;
+  if (disableBECheckbox) disableBECheckbox.checked = disableBE;
 
   mapOptions.forEach(opt => {
     opt.classList.toggle("active", opt.dataset.map === savedMap);

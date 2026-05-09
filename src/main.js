@@ -5,6 +5,7 @@ const fsp = require("fs/promises");
 const path = require("path");
 const os = require("os");
 const https = require("https");
+const patcher = require("./scripts/Patcher/patcher");
 
 const APP_VERSION = app.getVersion();
 
@@ -296,6 +297,8 @@ ipcMain.handle("dayz:scan-presets", async () => {
 
 let isServerRunning = false;
 let isGameRunning = false;
+let wasPatched = false;
+let lastServerExePath = null;
 const SERVER_NAME_ARG = "-serverName=DayZ_SPL";
 
 function killServer() {
@@ -313,6 +316,11 @@ function checkProcesses() {
   exec(`wmic process where "name='DayZServer_x64.exe'" get commandline`, (error, stdout) => {
     const running = !error && stdout.includes(SERVER_NAME_ARG);
     if (running !== isServerRunning) {
+      if (isServerRunning && !running && wasPatched && lastServerExePath) {
+        console.log("Server stopped, restoring original executable...");
+        patcher.restoreFile(lastServerExePath);
+        wasPatched = false;
+      }
       isServerRunning = running;
       broadcastUpdate("dayz:process-status", { running: isServerRunning });
     }
@@ -989,6 +997,18 @@ ipcMain.handle("dayz:launch", async (_event, dayzServerPath, map) => {
   
   settings.lastSyncTimes = lastSyncTimes;
   await saveSettings(settings);
+
+  
+  const serverExePath = path.join(dayzServerPath, "DayZServer_x64.exe");
+  lastServerExePath = serverExePath;
+  if (settings.disableBE) {
+    console.log("Disable BE requested, patching server...");
+    wasPatched = patcher.patchFile(serverExePath);
+  } else {
+    
+    patcher.restoreFile(serverExePath);
+    wasPatched = false;
+  }
 
   
   try {
