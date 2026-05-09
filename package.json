@@ -2,10 +2,32 @@
   "name": "dayz-sp",
   "version": "1.0.0",
   "description": "Electron app scaffold for DayZ-SP.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/huff-dev/DayZ-SP-Launcher.git"
+  },
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
-    "dev": "nodemon"
+    "dev": "nodemon",
+    "build": "electron-builder --win portable"
+  },
+  "build": {
+    "appId": "com.dayzsp.app",
+    "productName": "DayZ-SP",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*"
+    ],
+    "win": {
+      "target": "portable",
+      "icon": null
+    },
+    "portable": {
+      "artifactName": "DayZ-SP.exe"
+    }
   },
   "keywords": [],
   "author": "",
@@ -13,6 +35,8 @@
   "type": "commonjs",
   "devDependencies": {
     "electron": "^41.5.0",
+    "electron-builder": "^26.8.1",
+    "electron-packager": "^17.1.2",
     "nodemon": "^3.1.14"
   }
 }
