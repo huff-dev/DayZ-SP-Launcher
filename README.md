@@ -1,7 +1,7 @@
 <div align="center">
   <img src="src/images/icon_rounded.png" alt="DayZ-SP Banner" width="200">
   <h1 align="center">DayZ-SP</h1>
-  <p><strong>A lightweight, portable Electron launcher for offline single-player DayZ.</strong></p>
+  <p><strong>A lightweight, portable launcher for offline single-player DayZ.</strong></p>
 
   [![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](https://opensource.org/licenses/ISC)
   [![Releases](https://img.shields.io/github/v/release/huff-dev/DayZ-SP-Launcher)](https://github.com/huff-dev/DayZ-SP-Launcher/releases)
