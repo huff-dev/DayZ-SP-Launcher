@@ -263,7 +263,7 @@ function renderPresets(presets) {
 
   const saveNewBtn = document.createElement("button");
   saveNewBtn.className = "mods-dropdown-btn";
-  saveNewBtn.textContent = "Save new";
+  saveNewBtn.textContent = "Save As";
   btnRow.appendChild(saveNewBtn);
 
   dropdownMenu.appendChild(btnRow);
@@ -300,6 +300,7 @@ function renderPresets(presets) {
 
   function hideInput() {
     inputContainer.classList.remove("open");
+    list.classList.remove("disabled");
     setTimeout(() => {
       updateSaveBtn();
       saveNewBtn.disabled = false;
@@ -328,6 +329,7 @@ function renderPresets(presets) {
   saveNewBtn.addEventListener("click", (e) => {
     e.stopPropagation();
     inputContainer.classList.add("open");
+    list.classList.add("disabled");
     saveBtn.disabled = true;
     saveNewBtn.disabled = true;
     nameInput.focus();
@@ -363,7 +365,7 @@ function renderPresets(presets) {
     if (!preset.isDefault) {
       const delBtn = document.createElement("button");
       delBtn.className = "mods-dropdown-del-btn";
-      delBtn.textContent = "🗑";
+      delBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 7h12M9 7V5h6v2M8 7l1 13h6l1-13"/></svg>';
       delBtn.addEventListener("click", (e) => {
         e.stopPropagation();
         if (preset.filename === currentPresetFilename) {
