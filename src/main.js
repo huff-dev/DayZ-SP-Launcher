@@ -18,6 +18,33 @@ let dayzGameWatcher = null;
 let dayzGameWatchPath = null;
 let dayzGameWatchTimer = null;
 
+let mainWindow = null;
+
+const gotTheLock = app.requestSingleInstanceLock();
+
+if (!gotTheLock) {
+  app.quit();
+} else {
+  app.on("second-instance", (event, commandLine, workingDirectory) => {
+    
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+  });
+
+  app.whenReady().then(() => {
+    Menu.setApplicationMenu(null);
+    createWindow();
+
+    app.on("activate", () => {
+      if (BrowserWindow.getAllWindows().length === 0) {
+        createWindow();
+      }
+    });
+  });
+}
+
 function unique(paths) {
   return [...new Set(paths.filter(Boolean))];
 }
@@ -737,7 +764,7 @@ app.on("before-quit", () => {
 });
 
 function createWindow() {
-  const mainWindow = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 600,
     height: 600,
     resizable: false,
@@ -751,19 +778,11 @@ function createWindow() {
   });
 
   mainWindow.loadFile(path.join(__dirname, "index.html"));
-  
-}
 
-app.whenReady().then(() => {
-  Menu.setApplicationMenu(null);
-  createWindow();
-
-  app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
-    }
+  mainWindow.on("closed", () => {
+    mainWindow = null;
   });
-});
+}
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {
