@@ -10,7 +10,9 @@
 
 ---
 
-![Screenshot](src/images/screenshot.png)
+<p align="center">
+  <img src="src/images/screenshot.png" alt="Screenshot">
+</p>
 
 ## Requirements
 
