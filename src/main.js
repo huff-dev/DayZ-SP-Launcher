@@ -6,6 +6,7 @@ const path = require("path");
 const os = require("os");
 const https = require("https");
 const patcher = require("./scripts/Patcher/patcher");
+const goldberg = require("./offline");
 
 const APP_VERSION = app.getVersion();
 
@@ -232,6 +233,35 @@ function setupServerWatcher(appInfo) {
 }
 
 const SETTINGS_FILE = path.join(app.getPath("userData"), "settings.json");
+let settingsCache = null;
+let settingsWriteQueue = Promise.resolve();
+
+async function getSettings() {
+  if (settingsCache) return settingsCache;
+  try {
+    if (await pathExists(SETTINGS_FILE)) {
+      const data = await fsp.readFile(SETTINGS_FILE, "utf8");
+      settingsCache = JSON.parse(data);
+      return settingsCache;
+    }
+  } catch (error) {
+    console.error("Failed to read settings:", error);
+  }
+  settingsCache = {};
+  return settingsCache;
+}
+
+function saveSettings() {
+  settingsWriteQueue = settingsWriteQueue.then(async () => {
+    try {
+      await fsp.writeFile(SETTINGS_FILE, JSON.stringify(settingsCache, null, 2));
+    } catch (error) {
+      console.error("Failed to save settings:", error);
+    }
+  });
+  return settingsWriteQueue;
+}
+
 let dayzWorkshopWatcher = null;
 let dayzWorkshopWatchTimer = null;
 let lastModTimes = new Map();
@@ -299,6 +329,9 @@ let isServerRunning = false;
 let isGameRunning = false;
 let wasPatched = false;
 let lastServerExePath = null;
+let wasGoldbergApplied = false;
+let goldbergGamePath = null;
+let goldbergServerPath = null;
 const SERVER_NAME_ARG = "-serverName=DayZ_SPL";
 
 function killServer() {
@@ -321,6 +354,10 @@ function checkProcesses() {
         patcher.restoreFile(lastServerExePath);
         wasPatched = false;
       }
+      if (isServerRunning && !running && wasGoldbergApplied && goldbergServerPath && goldberg.hasGoldbergBackup(goldbergServerPath)) {
+        console.log("Server stopped, restoring original server steam_api64.dll...");
+        goldberg.removeGoldberg(null, goldbergServerPath);
+      }
       isServerRunning = running;
       broadcastUpdate("dayz:process-status", { running: isServerRunning });
     }
@@ -337,6 +374,13 @@ function checkProcesses() {
       if (isServerRunning) {
         killServer();
       }
+      if (wasGoldbergApplied && goldbergGamePath) {
+        console.log("Game exited, removing Goldberg emulator files...");
+        goldberg.removeGoldberg(goldbergGamePath, goldbergServerPath);
+        wasGoldbergApplied = false;
+        goldbergGamePath = null;
+        goldbergServerPath = null;
+      }
     }
     
     isGameRunning = running;
@@ -349,28 +393,6 @@ setInterval(checkProcesses, 2000);
 ipcMain.handle("dayz:is-server-running", () => isServerRunning);
 
 console.log(`Settings file path: ${SETTINGS_FILE}`);
-
-async function getSettings() {
-  try {
-    if (await pathExists(SETTINGS_FILE)) {
-      const data = await fsp.readFile(SETTINGS_FILE, "utf8");
-      const settings = JSON.parse(data);
-      console.log("Loaded settings:", settings);
-      return settings;
-    }
-  } catch (error) {
-    console.error("Failed to read settings:", error);
-  }
-  return {};
-}
-
-async function saveSettings(settings) {
-  try {
-    await fsp.writeFile(SETTINGS_FILE, JSON.stringify(settings, null, 2));
-  } catch (error) {
-    console.error("Failed to save settings:", error);
-  }
-}
 
 async function scanWorkshopMods(gamePath) {
   
@@ -503,15 +525,16 @@ ipcMain.handle("dayz:toggle-mod", async (_event, modFolder, enabled) => {
     enabledMods = enabledMods.filter(m => m.folderName !== modFolder.folderName);
   }
 
-  settings.enabledMods = enabledMods;
-  await saveSettings(settings);
-  
-  
-  if (dayzGameWatchPath) {
-    const mods = await scanWorkshopMods(dayzGameWatchPath);
-    broadcastUpdate("dayz:mods-updated", mods);
-  }
-});
+    settings.enabledMods = enabledMods;
+    await saveSettings();
+    
+
+    
+    if (dayzGameWatchPath) {
+      const mods = await scanWorkshopMods(dayzGameWatchPath);
+      broadcastUpdate("dayz:mods-updated", mods);
+    }
+  });
 
 ipcMain.handle("dayz:apply-preset", async (_event, filename) => {
   const presetPath = path.join(PRESETS_DIR, filename);
@@ -534,7 +557,7 @@ ipcMain.handle("dayz:apply-preset", async (_event, filename) => {
       .map(mod => ({ name: mod.name, folderName: mod.folderName }));
 
     settings.enabledMods = newEnabledMods;
-    await saveSettings(settings);
+    await saveSettings();
 
     if (dayzGameWatchPath) {
       const updatedMods = await scanWorkshopMods(dayzGameWatchPath);
@@ -698,10 +721,14 @@ ipcMain.handle("dayz:get-setting", async (_event, key) => {
   return settings[key];
 });
 
+ipcMain.handle("dayz:get-all-settings", async () => {
+  return await getSettings();
+});
+
 ipcMain.handle("dayz:save-setting", async (_event, key, value) => {
   const settings = await getSettings();
   settings[key] = value;
-  await saveSettings(settings);
+  await saveSettings();
 });
 
 const MAP_STORAGE_PATHS = {
@@ -996,7 +1023,7 @@ ipcMain.handle("dayz:launch", async (_event, dayzServerPath, map) => {
 
   
   settings.lastSyncTimes = lastSyncTimes;
-  await saveSettings(settings);
+  await saveSettings();
 
   
   const serverExePath = path.join(dayzServerPath, "DayZServer_x64.exe");
@@ -1008,6 +1035,21 @@ ipcMain.handle("dayz:launch", async (_event, dayzServerPath, map) => {
     
     patcher.restoreFile(serverExePath);
     wasPatched = false;
+  }
+
+  
+  if (settings.offlineMode) {
+    console.log("Offline mode requested, applying Goldberg emulator...");
+    wasGoldbergApplied = goldberg.applyGoldberg(dayzGameWatchPath, dayzServerPath);
+    goldbergGamePath = wasGoldbergApplied ? dayzGameWatchPath : null;
+    goldbergServerPath = wasGoldbergApplied ? dayzServerPath : null;
+  } else {
+    if (wasGoldbergApplied && goldbergGamePath) {
+      goldberg.removeGoldberg(goldbergGamePath, goldbergServerPath);
+      wasGoldbergApplied = false;
+      goldbergGamePath = null;
+      goldbergServerPath = null;
+    }
   }
 
   
@@ -1058,6 +1100,12 @@ app.on("before-quit", () => {
   if (dayzGameWatcher) dayzGameWatcher.close();
   if (dayzWorkshopWatcher) dayzWorkshopWatcher.close();
   if (dayzPresetsWatcher) dayzPresetsWatcher.close();
+  if (wasGoldbergApplied && goldbergGamePath) {
+    goldberg.removeGoldberg(goldbergGamePath, goldbergServerPath);
+    wasGoldbergApplied = false;
+    goldbergGamePath = null;
+    goldbergServerPath = null;
+  }
 });
 
 function createWindow() {

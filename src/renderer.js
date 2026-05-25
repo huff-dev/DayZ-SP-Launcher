@@ -8,6 +8,7 @@ const mapOptions = document.querySelectorAll(".map-option");
 const continueBtn = document.querySelector(".continue-button");
 const quickJoinCheckbox = document.getElementById("quick-join");
 const disableBECheckbox = document.getElementById("disable-be");
+const offlineModeCheckbox = document.getElementById("offline-mode");
 
 const updateLink = document.getElementById("update-link");
 window.appInfo.checkUpdate().then(result => {
@@ -165,14 +166,21 @@ disableBECheckbox?.addEventListener("change", () => {
   window.appInfo?.saveSetting?.("disableBE", disableBECheckbox.checked);
 });
 
+offlineModeCheckbox?.addEventListener("change", () => {
+  window.appInfo?.saveSetting?.("offlineMode", offlineModeCheckbox.checked);
+});
+
 
 (async () => {
-  const savedMap = await window.appInfo?.getSetting?.("selectedMap") || "chernarus";
-  const quickJoin = await window.appInfo?.getSetting?.("quickJoin") || false;
-  const disableBE = await window.appInfo?.getSetting?.("disableBE") || false;
+  const settings = await window.appInfo?.getAllSettings?.() || {};
+  const savedMap = settings.selectedMap || "chernarus";
+  const quickJoin = !!settings.quickJoin;
+  const disableBE = !!settings.disableBE;
+  const offlineMode = !!settings.offlineMode;
   
   if (quickJoinCheckbox) quickJoinCheckbox.checked = quickJoin;
   if (disableBECheckbox) disableBECheckbox.checked = disableBE;
+  if (offlineModeCheckbox) offlineModeCheckbox.checked = offlineMode;
 
   mapOptions.forEach(opt => {
     opt.classList.toggle("active", opt.dataset.map === savedMap);
@@ -230,6 +238,7 @@ let selectedPreset = null;
 let presetDirty = false;
 let currentPresetFilename = null;
 let currentPresetIsDefault = false;
+let pendingNewPreset = null;
 
 function updateSaveBtn() {
   const saveBtn = dropdownMenu?.querySelector(".mods-dropdown-btn:first-child");
@@ -347,6 +356,7 @@ function renderPresets(presets) {
       setTimeout(() => nameInput.classList.remove("mods-dropdown-input-error"), 1500);
       return;
     }
+    pendingNewPreset = value;
     window.appInfo.createPreset(value);
     hideInput();
   });
@@ -422,7 +432,14 @@ function renderPresets(presets) {
     presets.forEach(preset => appendPresetItem(preset));
   }
 
-  if (!selectedPreset && presets.length > 0) {
+  if (pendingNewPreset) {
+    const match = presets.find(p => p.name === pendingNewPreset);
+    if (match) {
+      selectPreset(match.name, match.filename, match.isDefault);
+      window.appInfo.applyPreset(match.filename);
+    }
+    pendingNewPreset = null;
+  } else if (!selectedPreset && presets.length > 0) {
     selectPreset(presets[0].name, presets[0].filename, presets[0].isDefault);
     window.appInfo.applyPreset(presets[0].filename);
   } else if (selectedPreset && !currentPresetFilename) {
