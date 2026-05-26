@@ -938,7 +938,15 @@ ipcMain.handle("dayz:launch", async (_event, dayzServerPath, map) => {
   try {
     const profilesPath = path.join(dayzServerPath, "Profiles", "DayzSPL");
     if (await pathExists(profilesPath)) {
-      await fsp.rm(profilesPath, { recursive: true, force: true });
+      const entries = await fsp.readdir(profilesPath, { withFileTypes: true });
+      for (const entry of entries) {
+        const fullPath = path.join(profilesPath, entry.name);
+        if (entry.isFile()) {
+          await fsp.rm(fullPath, { force: true });
+        } else if (entry.isDirectory() && (entry.name === "DataCache" || entry.name === "Users" || entry.name === "BattlEye")) {
+          await fsp.rm(fullPath, { recursive: true, force: true });
+        }
+      }
     }
 
     await generateServerConfig(dayzServerPath, map);
