@@ -627,6 +627,14 @@ header {
   padding: 0 10px;
 }
 
+.mod-row {
+  cursor: pointer;
+}
+
+.mod-row:hover td {
+  color: rgba(237, 234, 225, 0.9);
+}
+
 .col-enabled {
   width: 16px;
   padding-right: 4px !important;
@@ -671,6 +679,11 @@ input[type="checkbox"] {
   display: flex;
   align-items: center;
   gap: 14px;
+}
+
+.version-text {
+  margin-left: auto;
+  opacity: 0.6;
 }
 
 .update-link {

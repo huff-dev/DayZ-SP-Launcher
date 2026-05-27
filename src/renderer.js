@@ -10,6 +10,9 @@ const quickJoinCheckbox = document.getElementById("quick-join");
 const disableBECheckbox = document.getElementById("disable-be");
 const offlineModeCheckbox = document.getElementById("offline-mode");
 
+const versionSpan = document.getElementById("app-version");
+window.appInfo.getVersion().then(v => { versionSpan.textContent = `v${v}`; });
+
 const updateLink = document.getElementById("update-link");
 window.appInfo.checkUpdate().then(result => {
   if (result?.available) {
@@ -80,7 +83,15 @@ function renderModsList(mods) {
 
   mods.forEach(mod => {
     const row = document.createElement("tr");
-    if (mod.publishedId) row.id = mod.publishedId;
+    if (mod.publishedId) {
+      row.id = mod.publishedId;
+      row.classList.add("mod-row");
+      row.addEventListener("click", (e) => {
+        if (e.target.tagName !== "INPUT") {
+          window.appInfo.openExternal(`steam://url/CommunityFilePage/${mod.publishedId}`);
+        }
+      });
+    }
 
     const enabledCell = document.createElement("td");
     enabledCell.className = "col-enabled";

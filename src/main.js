@@ -705,6 +705,8 @@ ipcMain.handle("dayz:check-preset-dirty", async (_event, filename) => {
   }
 });
 
+ipcMain.handle("dayz:get-version", () => APP_VERSION);
+
 ipcMain.handle("dayz:check-update", async () => {
   return await checkForUpdates();
 });
