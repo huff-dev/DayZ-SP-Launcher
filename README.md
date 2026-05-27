@@ -31,7 +31,7 @@
 
 ## Download
 
-Download the latest portable version from **[Releases](https://github.com/huff-dev/DayZ-SP-Launcher/releases/latest/download/DayZ-SP.exe)**.
+Download the latest portable version from **[Releases](https://github.com/huff-dev/DayZ-SP-Launcher/releases/latest/download/DayZSP.exe)**.
 
 ## Building from Source
 
