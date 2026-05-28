@@ -39,35 +39,166 @@ document.getElementById("close")?.addEventListener("click", () => {
   window.appInfo?.close();
 });
 
-const searchBtn = document.getElementById("mods-search-btn");
-const searchContainer = document.getElementById("mods-search-container");
 const searchInput = document.getElementById("mods-search-input");
 
-searchBtn?.addEventListener("click", () => {
-  const opening = !searchContainer.classList.contains("open");
-  searchContainer.classList.toggle("open");
-  if (opening) {
-    setTimeout(() => searchInput?.focus(), 200);
+searchInput?.addEventListener("input", filterMods);
+
+const importBtn = document.getElementById("mods-import-btn");
+const importMenu = document.getElementById("mods-import-menu");
+
+importBtn?.addEventListener("click", (e) => {
+  e.stopPropagation();
+  if (importMenu.classList.contains("open")) {
+    importMenu.classList.remove("open");
   } else {
-    if (searchInput) {
-      searchInput.value = "";
-      filterMods();
-    }
+    closeAllDropdowns();
+    importMenu.classList.add("open");
   }
 });
 
-searchInput?.addEventListener("input", filterMods);
+async function renderImportMenu() {
+  importMenu.innerHTML = "";
+  const row = document.createElement("div");
+  row.className = "mods-dropdown-btn-row";
+  const btn = document.createElement("button");
+  btn.className = "mods-dropdown-btn";
+  btn.textContent = "Browse";
+  btn.addEventListener("click", async (e) => {
+    e.stopPropagation();
+    importMenu.classList.remove("open");
+    const folder = await window.appInfo.pickFolder();
+    if (folder) {
+      const result = await window.appInfo.importLocalMod(folder);
+      if (!result.success) console.warn("Import failed:", result.message);
+      renderImportMenu();
+    }
+  });
+  row.appendChild(btn);
+  importMenu.appendChild(row);
+  const divider = document.createElement("div");
+  divider.className = "mods-dropdown-divider";
+  importMenu.appendChild(divider);
+  const settings = await window.appInfo.getAllSettings();
+  const localModPaths = settings.localModPaths || [];
+  if (localModPaths.length === 0) {
+    const placeholder = document.createElement("div");
+    placeholder.className = "mods-import-placeholder";
+    placeholder.textContent = "No local mod paths exist";
+    importMenu.appendChild(placeholder);
+  } else {
+    localModPaths.forEach(p => {
+      const row = document.createElement("div");
+      row.className = "mods-dropdown-item-row";
+      const label = document.createElement("span");
+      label.className = "mods-dropdown-item-label";
+      label.textContent = p;
+      label.title = p;
+      label.addEventListener("click", (e) => {
+        e.stopPropagation();
+        importMenu.classList.remove("open");
+        window.appInfo.openFolder(p);
+      });
+      row.appendChild(label);
+      const delBtn = document.createElement("button");
+      delBtn.className = "mods-dropdown-del-btn";
+      delBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>';
+      delBtn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        await window.appInfo.removeLocalModPath(p);
+        renderImportMenu();
+      });
+      row.appendChild(delBtn);
+      importMenu.appendChild(row);
+    });
+  }
+}
+renderImportMenu();
 
 let activeLayerIndex = 0;
 let isServerRunningLocal = false;
 let allMods = [];
+let launchHadErrors = false;
+let sortMode = "name";
+
+const sortLabel = document.getElementById("mods-label-wrapper");
+const sortMenu = document.getElementById("mods-sort-menu");
+
+const sortOptions = [
+  { value: "name", label: "Name" },
+  { value: "date", label: "Date added" },
+];
+
+window.appInfo.getSetting("sortMode").then(saved => {
+  if (saved) sortMode = saved;
+  renderSortMenu();
+  filterMods();
+});
+
+function closeAllDropdowns() {
+  sortMenu?.classList.remove("open");
+  dropdownMenu?.classList.remove("open");
+  importMenu?.classList.remove("open");
+}
+
+sortLabel?.addEventListener("click", (e) => {
+  e.stopPropagation();
+  if (sortMenu.classList.contains("open")) {
+    sortMenu.classList.remove("open");
+  } else {
+    closeAllDropdowns();
+    sortMenu.classList.add("open");
+  }
+});
+
+document.addEventListener("click", (e) => {
+  if (sortMenu?.contains(e.target) || sortLabel?.contains(e.target)) return;
+  if (importMenu?.contains(e.target) || importBtn?.contains(e.target)) return;
+  sortMenu?.classList.remove("open");
+  importMenu?.classList.remove("open");
+});
+
+function renderSortMenu() {
+  sortMenu.innerHTML = "";
+
+  const header = document.createElement("div");
+  header.className = "mods-sort-header";
+  header.textContent = "Sort by";
+  sortMenu.appendChild(header);
+
+  sortOptions.forEach(opt => {
+    const item = document.createElement("div");
+    item.className = "mods-sort-item" + (opt.value === sortMode ? " active" : "");
+    item.textContent = opt.label;
+    item.addEventListener("click", (e) => {
+      e.stopPropagation();
+      sortMode = opt.value;
+      window.appInfo.saveSetting("sortMode", sortMode);
+      sortMenu.classList.remove("open");
+      renderSortMenu();
+      filterMods();
+    });
+    sortMenu.appendChild(item);
+  });
+}
+
+function sortMods(mods) {
+  return [...mods].sort((a, b) => {
+    if (sortMode === "date") {
+      return (b.mtime || 0) - (a.mtime || 0);
+    }
+    const nameA = (a.name.startsWith("@") ? a.name.slice(1) : a.name).toLowerCase();
+    const nameB = (b.name.startsWith("@") ? b.name.slice(1) : b.name).toLowerCase();
+    return nameA.localeCompare(nameB);
+  });
+}
 
 function filterMods() {
   const query = searchInput?.value.trim().toLowerCase();
-  const filtered = !query ? allMods : allMods.filter(mod => {
+  let filtered = !query ? allMods : allMods.filter(mod => {
     const displayName = (mod.name.startsWith("@") ? mod.name.slice(1) : mod.name).toLowerCase();
     return displayName.includes(query);
   });
+  filtered = sortMods(filtered);
   renderModsList(filtered);
 }
 
@@ -76,16 +207,35 @@ function renderModsList(mods) {
 
   if (mods.length === 0) {
     const row = document.createElement("tr");
-    row.innerHTML = `<td colspan="2" style="text-align: center; color: rgba(237, 234, 225, 0.4); padding: 20px;">No mods found in Steam workshop</td>`;
+    row.innerHTML = `<td colspan="3" style="text-align: center; color: rgba(237, 234, 225, 0.4); padding: 20px;">No mods found</td>`;
     modsList.appendChild(row);
     return;
   }
 
+  const duplicateFolders = new Set();
+  const nameCounts = new Map();
+  for (const mod of mods) {
+    const key = (mod.name || "").replace(/^@/, "").toLowerCase();
+    nameCounts.set(key, (nameCounts.get(key) || 0) + 1);
+  }
+  for (const [key, count] of nameCounts) {
+    if (count > 1) {
+      const enabled = mods.filter(m => {
+        const mk = (m.name || "").replace(/^@/, "").toLowerCase();
+        return mk === key && m.enabled;
+      });
+      if (enabled.length > 1) duplicateFolders.add(key);
+    }
+  }
+
   mods.forEach(mod => {
     const row = document.createElement("tr");
+    row.classList.add("mod-row");
+    const modKey = (mod.name || "").replace(/^@/, "").toLowerCase();
+    if (duplicateFolders.has(modKey) && mod.enabled) {
+      row.classList.add("duplicate");
+    }
     if (mod.publishedId) {
-      row.id = mod.publishedId;
-      row.classList.add("mod-row");
       row.addEventListener("click", (e) => {
         if (e.target.tagName !== "INPUT") {
           window.appInfo.openExternal(`steam://url/CommunityFilePage/${mod.publishedId}`);
@@ -99,7 +249,7 @@ function renderModsList(mods) {
     checkbox.type = "checkbox";
     checkbox.checked = mod.enabled;
     checkbox.addEventListener("change", () => {
-      window.appInfo.toggleMod({ name: mod.name, folderName: mod.folderName }, checkbox.checked);
+      window.appInfo.toggleMod(mod, checkbox.checked);
       if (selectedPreset) {
         presetDirty = true;
         updateLabel();
@@ -109,11 +259,38 @@ function renderModsList(mods) {
 
     const nameCell = document.createElement("td");
     nameCell.className = "col-name";
-    const displayName = mod.name.startsWith("@") ? mod.name.slice(1) : mod.name;
-    nameCell.textContent = displayName;
+    const displayName = mod.local && mod.name.startsWith("@") ? mod.name : (mod.name.startsWith("@") ? mod.name.slice(1) : mod.name);
+    const wrap = document.createElement("div");
+    wrap.className = "col-name-wrap";
+    const nameSpan = document.createElement("span");
+    nameSpan.className = "col-name-text";
+    nameSpan.textContent = displayName;
+    wrap.appendChild(nameSpan);
+    if (mod.local) {
+      const badge = document.createElement("span");
+      badge.className = "local-badge";
+      badge.textContent = "local";
+      wrap.appendChild(badge);
+    }
+    nameCell.appendChild(wrap);
 
     row.appendChild(enabledCell);
     row.appendChild(nameCell);
+
+    if (mod.fullPath) {
+      const folderCell = document.createElement("td");
+      folderCell.className = "col-folder-btn";
+      const folderBtn = document.createElement("button");
+      folderBtn.className = "mod-folder-btn";
+      folderBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>';
+      folderBtn.title = "Open mod folder";
+      folderBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        window.appInfo.openFolder(mod.fullPath);
+      });
+      folderCell.appendChild(folderBtn);
+      row.appendChild(folderCell);
+    }
     modsList.appendChild(row);
   });
 
@@ -122,6 +299,7 @@ function renderModsList(mods) {
 
 function renderMods(mods) {
   allMods = mods;
+  if (searchInput) searchInput.placeholder = `Search ${mods.length} mod${mods.length !== 1 ? "s" : ""}..`;
   filterMods();
 }
 
@@ -181,14 +359,13 @@ offlineModeCheckbox?.addEventListener("change", () => {
   window.appInfo?.saveSetting?.("offlineMode", offlineModeCheckbox.checked);
 });
 
-
 (async () => {
   const settings = await window.appInfo?.getAllSettings?.() || {};
   const savedMap = settings.selectedMap || "chernarus";
   const quickJoin = !!settings.quickJoin;
   const disableBE = !!settings.disableBE;
   const offlineMode = !!settings.offlineMode;
-  
+
   if (quickJoinCheckbox) quickJoinCheckbox.checked = quickJoin;
   if (disableBECheckbox) disableBECheckbox.checked = disableBE;
   if (offlineModeCheckbox) offlineModeCheckbox.checked = offlineMode;
@@ -274,6 +451,9 @@ function selectPreset(name, filename, isDefault) {
   updateSaveBtn();
   dropdownMenu?.classList.remove("open");
   window.appInfo.saveSetting("selectedPreset", name);
+  document.querySelectorAll(".mods-dropdown-item-label").forEach(el => {
+    el.classList.toggle("active", el.textContent === name);
+  });
 }
 
 function checkDirty() {
@@ -400,7 +580,7 @@ function renderPresets(presets) {
     row.className = "mods-dropdown-item-row";
 
     const label = document.createElement("span");
-    label.className = "mods-dropdown-item-label";
+    label.className = "mods-dropdown-item-label" + (preset.name === selectedPreset ? " active" : "");
     label.textContent = preset.name;
     label.addEventListener("click", () => {
       selectPreset(preset.name, preset.filename, preset.isDefault);
@@ -411,7 +591,7 @@ function renderPresets(presets) {
     if (!preset.isDefault) {
       const delBtn = document.createElement("button");
       delBtn.className = "mods-dropdown-del-btn";
-      delBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 7h12M9 7V5h6v2M8 7l1 13h6l1-13"/></svg>';
+      delBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>';
       delBtn.addEventListener("click", (e) => {
         e.stopPropagation();
         if (preset.filename === currentPresetFilename) {
@@ -466,7 +646,12 @@ function renderPresets(presets) {
 
 dropdownToggle?.addEventListener("click", (e) => {
   e.stopPropagation();
-  dropdownMenu.classList.toggle("open");
+  if (dropdownMenu.classList.contains("open")) {
+    dropdownMenu.classList.remove("open");
+  } else {
+    closeAllDropdowns();
+    dropdownMenu.classList.add("open");
+  }
 });
 
 document.addEventListener("click", (e) => {
@@ -517,10 +702,6 @@ window.appInfo.onDayzModsUpdated(renderMods);
 
 document.getElementById("workshop-btn").addEventListener("click", () => {
   window.location.href = 'steam://openurl/https://steamcommunity.com/app/221100/workshop/';
-});
-
-document.getElementById("launcher-btn").addEventListener("click", () => {
-  window.appInfo.launchDayZLauncher();
 });
 
 const confirmContainer = document.getElementById("new-game-confirm");
@@ -602,6 +783,8 @@ async function handleLaunch(isNewGame = false, forceDelete = false) {
    
   spinner.classList.remove("hidden");
   statusText.textContent = "Preparing server...";
+  statusText.style.color = "";
+  launchHadErrors = false;
   
   const result = await window.appInfo.launchDayZ(serverResult.installPath, activeMap);
    
@@ -614,13 +797,18 @@ async function handleLaunch(isNewGame = false, forceDelete = false) {
   
   if (!isServerRunningLocal) {
     statusText.textContent = result.message;
-    setTimeout(() => {
-      if (!isServerRunningLocal) {
-        statusText.textContent = "";
-      } else {
-        statusText.textContent = "DayZ server is running";
-      }
-    }, 3000);
+    if (result.errors?.length) {
+      statusText.style.color = "#e06c75";
+      launchHadErrors = true;
+    } else {
+      launchHadErrors = false;
+      setTimeout(() => {
+        if (!isServerRunningLocal) {
+          statusText.textContent = "";
+          statusText.style.color = "";
+        }
+      }, 3000);
+    }
   }
 }
 
@@ -642,7 +830,9 @@ function updateButtonsState(isServerRunning) {
   if (isServerRunning) {
     newGameBtn.disabled = true;
     if (continueBtn) continueBtn.disabled = true;
-    statusText.textContent = "DayZ server is running";
+    if (!launchHadErrors) {
+      statusText.textContent = "DayZ server is running";
+    }
   } else {
     newGameBtn.disabled = false;
     

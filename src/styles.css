@@ -94,7 +94,7 @@ header {
   height: 100%;
   overflow: hidden;
   z-index: 5;
-  padding: 10px 20px;
+  padding: 0 20px;
   min-height: 0;
 }
 
@@ -180,8 +180,6 @@ header {
 
 .mods-container {
   width: 50%;
-  overflow-y: auto;
-  scrollbar-width: none;
   background: #111111;
   border-radius: 8px;
   box-shadow:
@@ -189,6 +187,18 @@ header {
     0 0 24px rgba(0, 0, 0, 0.2);
   display: flex;
   flex-direction: column;
+  min-height: 0;
+}
+
+.mods-table-wrap {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  scrollbar-width: none;
+}
+
+.mods-table-wrap::-webkit-scrollbar {
+  display: none;
 }
 
 .button-row {
@@ -257,7 +267,7 @@ header {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 1px;
-  color: rgba(237, 234, 225, 0.4);
+  color: rgba(237, 234, 225, 0.6);
   position: sticky;
   top: 0;
   background: #111111;
@@ -272,98 +282,179 @@ header {
   position: relative;
 }
 
-.mods-header-dropdown {
-  position: absolute;
-  right: 4px;
+.mods-label-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  cursor: pointer;
+  position: relative;
+  color: rgba(237, 234, 225, 0.6);
+  user-select: none;
 }
 
-.mods-search-btn {
+.mods-label-wrapper svg {
+  width: 10px;
+  height: 10px;
+  stroke-width: 2.5;
+}
+
+.mods-label-wrapper:hover {
+  color: rgba(237, 234, 225, 0.9);
+}
+
+.mods-sort-menu {
+  display: none;
   position: absolute;
-  left: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  top: 100%;
+  width: 120px;
+  background: #1a1a1a;
+  border: 1px solid rgba(237, 234, 225, 0.1);
+  border-radius: 4px;
+  padding: 4px 0;
+  padding-top: 0;
+  z-index: 10;
+  margin-top: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.mods-sort-menu.open {
+  display: block;
+}
+
+.mods-sort-header {
+  padding: 4px 8px;
+  font-size: 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: rgba(237, 234, 225, 0.35);
+  border-bottom: 1px solid rgba(237, 234, 225, 0.1);
+  cursor: default;
+  text-align: center;
+}
+
+.mods-sort-item {
+  padding: 4px 8px;
+  font-size: 0.55rem;
+  color: rgba(237, 234, 225, 0.6);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.mods-sort-item:hover {
+  background: rgba(237, 234, 225, 0.08);
+  color: rgba(237, 234, 225, 0.9);
+}
+
+.mods-sort-item.active {
+  color: rgba(180, 200, 120, 0.9);
+}
+
+.mods-import-wrapper {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 4px;
+  display: flex;
+}
+
+.mods-import-menu {
+  display: none;
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  background: #1a1a1a;
+  border: 1px solid rgba(237, 234, 225, 0.1);
+  border-radius: 4px;
+  z-index: 10;
+  margin-top: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.mods-import-menu.open {
+  display: block;
+}
+
+.mods-import-placeholder {
+  padding: 6px 8px;
+  text-align: center;
+  font-size: 0.5rem;
+  color: rgba(237, 234, 225, 0.35);
+  margin-bottom: 4px;
+}
+
+
+
+.mods-import-path:hover {
+  background: rgba(237, 234, 225, 0.08);
+  color: rgba(237, 234, 225, 0.9);
+}
+
+.mods-import-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-
-  width: 24px;
-  height: 24px;
-
+  width: 16px;
+  height: 16px;
+  margin-left: 4px;
+  padding: 0;
   background: transparent;
   border: none;
-  padding: 0;
-
-  color: rgba(237, 234, 225, 0.45);
+  /* border-radius: 3px; */
+  color: rgba(237, 234, 225, 0.3);
   cursor: pointer;
-
-  transition:
-    color 0.15s ease,
-    opacity 0.15s ease;
+  transition: color 0.15s ease, background 0.15s ease, opacity 0.15s ease;
 }
 
-.mods-search-btn svg {
+.mods-import-btn svg {
   width: 14px;
   height: 14px;
-  stroke-width: 3.5;
 }
 
-.mods-search-btn:hover {
+.mods-import-btn:hover {
   color: rgba(237, 234, 225, 0.8);
 }
 
-.mods-search-btn:active {
-  opacity: 0.7;
+.mods-header-dropdown {
+  position: absolute;
+  right: 0;
 }
 
-.mods-search-container {
-  max-height: 0;
-  overflow: hidden;
-
-  opacity: 0;
-  transform: translateY(-4px);
-
-  transition:
-    max-height 0.25s ease,
-    opacity 0.18s ease,
-    transform 0.18s ease;
-
+.mods-search-bar {
   display: flex;
-  align-items: stretch;
+  align-items: center;
+  gap: 6px;
+  margin: 0 8px 6px;
+  padding: 3px 8px;
+  background: rgba(237, 234, 225, 0.06);
+  border: 1px solid rgba(237, 234, 225, 0.15);
+  border-radius: 3px;
 }
 
-.mods-search-container.open {
-  max-height: 40px;
-
-  opacity: 1;
-  transform: translateY(0);
+.mods-search-bar-icon {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  color: rgba(237, 234, 225, 0.35);
+  stroke-width: 2.5;
 }
 
 .mods-search-input {
   flex: 1;
-  width: 100%;
-  height: 20px;
-
-  box-sizing: border-box;
-  padding: 0 10px;
-
-  background: rgba(237, 234, 225, 0.06);
+  min-width: 0;
+  background: transparent;
   border: none;
-  border-bottom: 1px solid rgba(237, 234, 225, 0.1);
-
   color: rgba(237, 234, 225, 0.8);
   font-size: 0.6rem;
   font-family: inherit;
   outline: none;
-
-  transition:
-    background 0.15s ease,
-    border-color 0.15s ease;
+  padding: 0;
 }
 
 .mods-search-input::placeholder {
   color: rgba(237, 234, 225, 0.3);
-}
-
-.mods-search-input:focus {
-  background: rgba(237, 234, 225, 0.1);
 }
 
 .mods-dropdown-toggle {
@@ -373,9 +464,10 @@ header {
   color: rgba(237, 234, 225, 0.4);
   cursor: pointer;
   font-size: 0.6rem;
-  line-height: 1;
+  /* line-height: 1; */
   padding: 2px 1px;
   width: 80px;
+  margin-right: 4px;
   letter-spacing: 0;
   text-transform: none;
   font-family: inherit;
@@ -410,6 +502,7 @@ header {
   padding: 4px 0;
   z-index: 10;
   margin-top: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
 .mods-dropdown-menu.open {
@@ -467,6 +560,7 @@ header {
 .mods-dropdown-item-row {
   display: flex;
   align-items: center;
+  margin-bottom: 4px;
 }
 
 .mods-dropdown-item-label {
@@ -483,6 +577,10 @@ header {
 .mods-dropdown-item-label:hover {
   background: rgba(237, 234, 225, 0.08);
   color: rgba(237, 234, 225, 0.9);
+}
+
+.mods-dropdown-item-label.active {
+  color: rgba(180, 200, 120, 0.9);
 }
 
 .mods-dropdown-del-btn {
@@ -588,7 +686,7 @@ header {
   cursor: pointer;
   font-size: 0.5rem;
   font-family: inherit;
-  padding: 3px 0;
+  padding: 3px 6px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -605,7 +703,7 @@ header {
 
 .mods-dropdown-divider {
   height: 1px;
-  margin: 5px 0;
+  margin-bottom: 4px;
   background: rgba(237, 234, 225, 0.2);
   border: none;
 }
@@ -613,6 +711,7 @@ header {
 .mods-table {
   width: 100%;
   border-collapse: collapse;
+  margin-bottom: 10px;
 }
 
 .mods-table thead {
@@ -635,6 +734,10 @@ header {
   color: rgba(237, 234, 225, 0.9);
 }
 
+.mod-row.duplicate td {
+  color: #e06c75 !important;
+}
+
 .col-enabled {
   width: 16px;
   padding-right: 4px !important;
@@ -645,9 +748,69 @@ header {
   font-family: 'Consolas', 'Courier New', monospace;
   letter-spacing: -0.3px;
   white-space: nowrap;
+  max-width: 0;
+  width: auto;
+}
+
+.col-name-wrap {
+  display: flex;
+  align-items: center;
+  max-width: 100%;
+}
+
+.col-name-text {
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 0;
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+.local-badge {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 9px;
+  color: #888;
+  border: 1px solid #555;
+  border-radius: 3px;
+  line-height: 1;
+  padding: 1px 3px;
+  margin-left: 4px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.col-folder-btn {
+  width: 0;
+  overflow: visible;
+  text-align: right;
+}
+
+.mod-folder-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  margin: 0 auto;
+  background: transparent;
+  border: none;
+  border-radius: 2px;
+  color: rgba(237, 234, 225, 0.4);
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease, opacity 0.15s ease;
+}
+
+.mod-folder-btn svg {
+  width: 12px;
+  height: 12px;
+}
+
+.mod-folder-btn:hover {
+  color: rgba(237, 234, 225, 0.9);
+}
+
+.mod-row:hover .mod-folder-btn {
+  display: flex;
 }
 
 input[type="checkbox"] {
@@ -838,7 +1001,7 @@ input[type="checkbox"] {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 1px;
-  color: rgba(237, 234, 225, 0.4);
+  color: rgba(237, 234, 225, 0.6);
   text-align: center;
   background: #111111;
   border-bottom: 1px solid rgba(237, 234, 225, 0.1);
@@ -869,6 +1032,7 @@ input[type="checkbox"] {
   color: rgba(237, 234, 225, 0.6);
   font-family: 'Consolas', 'Courier New', monospace;
   cursor: pointer;
+  margin-left: 4px !important;
 }
 
 .opt-cb {

@@ -46,6 +46,11 @@ contextBridge.exposeInMainWorld("appInfo", {
   getVersion: () => ipcRenderer.invoke("dayz:get-version"),
   checkUpdate: () => ipcRenderer.invoke("dayz:check-update"),
   openExternal: (url) => ipcRenderer.invoke("dayz:open-external", url),
+  openFolder: (folderPath) => ipcRenderer.invoke("dayz:open-folder", folderPath),
+  pickFolder: () => ipcRenderer.invoke("dayz:pick-folder"),
+  importLocalMod: (sourcePath) => ipcRenderer.invoke("dayz:import-local-mod", sourcePath),
+  addLocalModPath: (modPath) => ipcRenderer.invoke("dayz:add-local-mod-path", modPath),
+  removeLocalModPath: (sourcePath) => ipcRenderer.invoke("dayz:remove-local-mod-path", sourcePath),
   onUpdateAvailable: (callback) => {
     const listener = (_event, info) => callback(info);
     ipcRenderer.on("dayz:update-available", listener);

@@ -46,6 +46,13 @@ function applyToPath(basePath, label) {
   fs.writeFileSync(path.join(settingsDir, DISABLE_NETWORKING_MARKER), "");
   console.log(`Goldberg: Created steam_settings with offline + disable_networking flags (${label})`);
 
+  const dlcSource = path.join(GOLDBERG_DIR, "DLC.txt");
+  const dlcDest = path.join(settingsDir, "DLC.txt");
+  if (fs.existsSync(dlcSource)) {
+    fs.copyFileSync(dlcSource, dlcDest);
+    console.log(`Goldberg: Copied DLC.txt to steam_settings (${label})`);
+  }
+
   return true;
 }
 

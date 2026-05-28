@@ -39,34 +39,48 @@
 
       <section class="content-container">
         <section class="mods-container">
-          <h2 class="mods-header">
+          <div class="mods-header">
             <div class="mods-header-top">
-              <button class="mods-search-btn" id="mods-search-btn" aria-label="Search">
+              <div class="mods-import-wrapper">
+                <button class="mods-import-btn" id="mods-import-btn" title="Import local mod">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                    <path d="M5 12h14M12 5v14"/>
+                  </svg>
+                </button>
+                <div class="mods-import-menu" id="mods-import-menu"></div>
+              </div>
+              <div class="mods-label-wrapper" id="mods-label-wrapper">
+                <span>Mods</span>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <circle cx="11" cy="11" r="7"></circle>
-                  <line x1="16.65" y1="16.65" x2="21" y2="21"></line>
+                  <polyline points="6 9 12 15 18 9"/>
                 </svg>
-              </button>
-              <span>Mods</span>
+                <div class="mods-sort-menu" id="mods-sort-menu"></div>
+              </div>
               <div class="mods-header-dropdown">
                 <button class="mods-dropdown-toggle" id="mods-dropdown-toggle"><span class="mods-dropdown-label">presets</span></button>
                 <div class="mods-dropdown-menu" id="mods-dropdown-menu"></div>
               </div>
             </div>
-            <div class="mods-search-container" id="mods-search-container">
-              <input type="text" class="mods-search-input" id="mods-search-input" placeholder="Search mods...">
-            </div>
-          </h2>
-          <table class="mods-table">
-            <thead>
-              <tr>
-                <th class="col-enabled">Enabled</th>
-                <th class="col-name">Name</th>
-              </tr>
-            </thead>
-            <tbody id="mods-list">
-            </tbody>
-          </table>
+          </div>
+          <div class="mods-search-bar">
+            <svg class="mods-search-bar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="7"></circle>
+              <line x1="16.65" y1="16.65" x2="21" y2="21"></line>
+            </svg>
+            <input type="text" class="mods-search-input" id="mods-search-input" placeholder="Search mods...">
+          </div>
+          <div class="mods-table-wrap">
+            <table class="mods-table">
+              <thead>
+                <tr>
+                  <th class="col-enabled">Enabled</th>
+                  <th class="col-name">Name</th>
+                </tr>
+              </thead>
+              <tbody id="mods-list">
+              </tbody>
+            </table>
+          </div>
       </section>
       <div class="right-column">
         <div class="workshop-container">
@@ -84,7 +98,7 @@
               <input type="checkbox" id="disable-be" />
               <label for="disable-be" class="option-label">Disable BE</label>
             </div>
-            <div class="option-item option-item-full">
+            <div class="option-item">
               <input type="checkbox" id="offline-mode" />
               <label for="offline-mode" class="option-label">Offline Mode</label>
             </div>
@@ -122,7 +136,6 @@
         <a id="update-link" class="update-link hidden">Update available</a>
       </div>
       <div class="status-right">
-        <button id="launcher-btn" class="launcher-btn" title="Launch DayZ Launcher">DayZ Launcher</button>
         <div class="server-status" title="DayZ install status">
           <span class="server-label">DayZ</span>
           <span

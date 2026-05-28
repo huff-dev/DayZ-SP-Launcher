@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, ipcMain, shell } = require("electron");
+const { app, BrowserWindow, Menu, ipcMain, shell, dialog } = require("electron");
 const { exec } = require("child_process");
 const fs = require("fs");
 const fsp = require("fs/promises");
@@ -264,6 +264,8 @@ function saveSettings() {
 
 let dayzWorkshopWatcher = null;
 let dayzWorkshopWatchTimer = null;
+let dayzLocalWatchTimer = null;
+const dayzLocalWatchers = new Map();
 let lastModTimes = new Map();
 
 const PRESETS_DIR = path.join(os.homedir(), "AppData", "Local", "DayZ Launcher", "Presets");
@@ -272,30 +274,23 @@ let dayzPresetsWatchTimer = null;
 
 async function scanPresets() {
   try {
-    if (!(await pathExists(PRESETS_DIR))) return [];
-
-    const files = await fsp.readdir(PRESETS_DIR);
     const presetFiles = [];
+    presetFiles.push({ name: "DayZ (default)", filename: "__vanilla__", isDefault: true, mtime: 0 });
 
-    for (const file of files) {
-      const fullPath = path.join(PRESETS_DIR, file);
-      try {
-        const stat = await fsp.stat(fullPath);
-        if (!stat.isFile()) continue;
+    if (await pathExists(PRESETS_DIR)) {
+      const files = await fsp.readdir(PRESETS_DIR);
+      for (const file of files) {
+        const fullPath = path.join(PRESETS_DIR, file);
+        try {
+          const stat = await fsp.stat(fullPath);
+          if (!stat.isFile()) continue;
 
-        let name;
-        let isDefault = false;
-        if (file.endsWith(".preset2")) {
-          name = file.replace(/\.preset2$/, "");
-        } else if (file.endsWith(".defaultpreset2")) {
-          name = "DayZ (default)";
-          isDefault = true;
-        } else {
-          continue;
-        }
-
-        presetFiles.push({ name, filename: file, mtime: stat.mtimeMs, isDefault });
-      } catch { }
+          if (file.endsWith(".preset2")) {
+            const name = file.replace(/\.preset2$/, "");
+            presetFiles.push({ name, filename: file, mtime: stat.mtimeMs, isDefault: false });
+          }
+        } catch { }
+      }
     }
 
     presetFiles.sort((a, b) => b.mtime - a.mtime);
@@ -309,14 +304,18 @@ async function scanPresets() {
 function setupPresetsWatcher() {
   if (dayzPresetsWatcher) dayzPresetsWatcher.close();
 
+  const notify = async () => {
+    clearTimeout(dayzPresetsWatchTimer);
+    dayzPresetsWatchTimer = setTimeout(async () => {
+      const presets = await scanPresets();
+      broadcastUpdate("dayz:presets-updated", presets);
+    }, 300);
+  };
+
   if (fs.existsSync(PRESETS_DIR)) {
     dayzPresetsWatcher = fs.watch(PRESETS_DIR, async (eventType, filename) => {
       if (filename && !filename.endsWith(".preset2")) return;
-      clearTimeout(dayzPresetsWatchTimer);
-      dayzPresetsWatchTimer = setTimeout(async () => {
-        const presets = await scanPresets();
-        broadcastUpdate("dayz:presets-updated", presets);
-      }, 300);
+      notify();
     });
   }
 }
@@ -464,6 +463,107 @@ async function scanWorkshopMods(gamePath) {
   }
 }
 
+async function isLocalModFolder(folderPath) {
+  const folderName = path.basename(folderPath);
+  if (await pathExists(path.join(folderPath, "meta.cpp"))) return { hasMeta: true };
+  if (!folderName.startsWith("@")) return null;
+  const addonsPath = path.join(folderPath, "addons");
+  if (!(await pathExists(addonsPath))) return null;
+  try {
+    const addonFiles = await fsp.readdir(addonsPath);
+    if (!addonFiles.some(f => f.endsWith(".pbo"))) return null;
+  } catch { return null; }
+  return { hasMeta: false, name: folderName };
+}
+
+async function scanLocalMods() {
+  try {
+    const settings = await getSettings();
+    const localPaths = settings.localModPaths || [];
+    const enabledMods = settings.enabledMods || [];
+    const mods = [];
+    for (const parentPath of localPaths) {
+      if (!(await pathExists(parentPath))) continue;
+      const selfCheck = await isLocalModFolder(parentPath);
+      if (selfCheck) {
+        const stat = await fsp.stat(parentPath);
+        let modName = path.basename(parentPath);
+        if (selfCheck.hasMeta) {
+          try {
+            const metaContent = await fsp.readFile(path.join(parentPath, "meta.cpp"), "utf8");
+            const nameMatch = metaContent.match(/name\s*=\s*"([^"]+)"/);
+            if (nameMatch) modName = nameMatch[1];
+          } catch {}
+        } else {
+          modName = selfCheck.name;
+        }
+        mods.push({
+          name: modName,
+          publishedId: null,
+          folderName: path.basename(parentPath),
+          fullPath: parentPath,
+          mtime: stat.mtimeMs,
+          updated: false,
+          local: true
+        });
+        continue;
+      }
+      const files = await fsp.readdir(parentPath, { withFileTypes: true });
+      for (const f of files) {
+        if (!f.isDirectory()) continue;
+        const modFolderPath = path.join(parentPath, f.name);
+        const check = await isLocalModFolder(modFolderPath);
+        if (!check) continue;
+        const stat = await fsp.stat(modFolderPath);
+        let modName = f.name;
+        if (check.hasMeta) {
+          try {
+            const metaContent = await fsp.readFile(path.join(modFolderPath, "meta.cpp"), "utf8");
+            const nameMatch = metaContent.match(/name\s*=\s*"([^"]+)"/);
+            if (nameMatch) modName = nameMatch[1];
+          } catch {}
+        } else {
+          modName = check.name;
+        }
+        mods.push({
+          name: modName,
+          publishedId: null,
+          folderName: f.name,
+          fullPath: modFolderPath,
+          mtime: stat.mtimeMs,
+          updated: false,
+          local: true
+        });
+      }
+    }
+    return mods.map(m => ({
+      ...m,
+      enabled: enabledMods.some(em => em.folderName === m.folderName)
+    }));
+  } catch { return []; }
+}
+
+async function setupLocalModsWatcher() {
+  for (const [, w] of dayzLocalWatchers) w.close();
+  dayzLocalWatchers.clear();
+  const settings = await getSettings();
+  const paths = settings.localModPaths || [];
+  for (const p of paths) {
+    if (!fs.existsSync(p)) continue;
+    const watcher = fs.watch(p, { recursive: false }, () => {
+      clearTimeout(dayzLocalWatchTimer);
+      dayzLocalWatchTimer = setTimeout(async () => {
+        const [workshopMods, localMods] = await Promise.all([
+          dayzGameWatchPath ? scanWorkshopMods(dayzGameWatchPath) : [],
+          scanLocalMods()
+        ]);
+        broadcastUpdate("dayz:mods-updated", [...workshopMods, ...localMods]);
+      }, 300);
+    });
+    dayzLocalWatchers.set(p, watcher);
+  }
+}
+
 function setupWorkshopWatcher(gamePath) {
   const workshopPath = path.join(gamePath, "..", "..", "workshop", "content", DAYZ_GAME_APP_ID);
   
@@ -475,8 +575,11 @@ function setupWorkshopWatcher(gamePath) {
     dayzWorkshopWatcher = fs.watch(workshopPath, () => {
       clearTimeout(dayzWorkshopWatchTimer);
       dayzWorkshopWatchTimer = setTimeout(async () => {
-        const mods = await scanWorkshopMods(gamePath);
-        broadcastUpdate("dayz:mods-updated", mods);
+        const [workshopMods, localMods] = await Promise.all([
+          scanWorkshopMods(gamePath),
+          scanLocalMods()
+        ]);
+        broadcastUpdate("dayz:mods-updated", [...workshopMods, ...localMods]);
       }, 300);
     });
   }
@@ -498,6 +601,7 @@ function setupGameWatcher(appInfo) {
 
   
   setupWorkshopWatcher(appInfo.installPath);
+  setupLocalModsWatcher();
 }
 
 async function scanForDayzServer() {
@@ -509,8 +613,11 @@ async function scanForDayzGame() {
 }
 
 ipcMain.handle("dayz:scan-mods", async () => {
-  if (!dayzGameWatchPath) return [];
-  return await scanWorkshopMods(dayzGameWatchPath);
+  const [workshopMods, localMods] = await Promise.all([
+    dayzGameWatchPath ? scanWorkshopMods(dayzGameWatchPath) : [],
+    scanLocalMods()
+  ]);
+  return [...workshopMods, ...localMods];
 });
 
 ipcMain.handle("dayz:toggle-mod", async (_event, modFolder, enabled) => {
@@ -519,7 +626,7 @@ ipcMain.handle("dayz:toggle-mod", async (_event, modFolder, enabled) => {
 
   if (enabled) {
     if (!enabledMods.some(m => m.folderName === modFolder.folderName)) {
-      enabledMods.push({ name: modFolder.name, folderName: modFolder.folderName });
+      enabledMods.push({ name: modFolder.name, folderName: modFolder.folderName, local: modFolder.local, fullPath: modFolder.fullPath });
     }
   } else {
     enabledMods = enabledMods.filter(m => m.folderName !== modFolder.folderName);
@@ -528,41 +635,96 @@ ipcMain.handle("dayz:toggle-mod", async (_event, modFolder, enabled) => {
     settings.enabledMods = enabledMods;
     await saveSettings();
     
-
-    
-    if (dayzGameWatchPath) {
-      const mods = await scanWorkshopMods(dayzGameWatchPath);
-      broadcastUpdate("dayz:mods-updated", mods);
-    }
+    const [workshopMods, localMods] = await Promise.all([
+      dayzGameWatchPath ? scanWorkshopMods(dayzGameWatchPath) : [],
+      scanLocalMods()
+    ]);
+    broadcastUpdate("dayz:mods-updated", [...workshopMods, ...localMods]);
   });
 
+async function generatePresetContent(enabledMods) {
+  const [workshopMods, localMods] = await Promise.all([
+    dayzGameWatchPath ? scanWorkshopMods(dayzGameWatchPath) : [],
+    scanLocalMods()
+  ]);
+
+  const enabledFolderNames = new Set(enabledMods.map(m => m.folderName));
+
+  const steamIds = workshopMods
+    .filter(m => enabledFolderNames.has(m.folderName) && m.publishedId)
+    .map(m => m.publishedId);
+
+  const localPaths = localMods
+    .filter(m => enabledFolderNames.has(m.folderName))
+    .map(m => m.fullPath);
+
+  const now = formatPresetDate(new Date());
+  const idXml = [
+    ...steamIds.map(id => `    <id>steam:${id}</id>`),
+    ...localPaths.map(p => `    <id>local:${p}</id>`)
+  ].join("\n");
+
+  return `<?xml version="1.0" encoding="utf-8"?>
+<addons-presets>
+  <last-update>${now}</last-update>
+  <published-ids>
+${idXml}
+  </published-ids>
+</addons-presets>`;
+}
+
 ipcMain.handle("dayz:apply-preset", async (_event, filename) => {
+  if (filename === "__vanilla__") {
+    const settings = await getSettings();
+    settings.enabledMods = [];
+    await saveSettings();
+    const [updatedWorkshop, updatedLocal] = await Promise.all([
+      dayzGameWatchPath ? scanWorkshopMods(dayzGameWatchPath) : [],
+      scanLocalMods()
+    ]);
+    broadcastUpdate("dayz:mods-updated", [...updatedWorkshop, ...updatedLocal]);
+    return;
+  }
+
   const presetPath = path.join(PRESETS_DIR, filename);
   if (!(await pathExists(presetPath))) return;
 
   try {
     const content = await fsp.readFile(presetPath, "utf8");
-    const idRegex = /<id>steam:(\d+)<\/id>/g;
-    const presetIds = [];
+    const steamRegex = /<id>steam:(\d+)<\/id>/g;
+    const localRegex = /<id>local:([^<]+)<\/id>/g;
+    const presetSteamIds = [];
+    const presetLocalPaths = [];
     let match;
-    while ((match = idRegex.exec(content)) !== null) {
-      presetIds.push(match[1]);
+    while ((match = steamRegex.exec(content)) !== null) {
+      presetSteamIds.push(match[1]);
+    }
+    while ((match = localRegex.exec(content)) !== null) {
+      presetLocalPaths.push(match[1]);
     }
 
     const settings = await getSettings();
-    const mods = await scanWorkshopMods(dayzGameWatchPath);
+    const [workshopMods, localMods] = await Promise.all([
+      dayzGameWatchPath ? scanWorkshopMods(dayzGameWatchPath) : [],
+      scanLocalMods()
+    ]);
 
-    const newEnabledMods = mods
-      .filter(mod => presetIds.includes(mod.publishedId))
-      .map(mod => ({ name: mod.name, folderName: mod.folderName }));
+    const workshopEnabled = workshopMods
+      .filter(mod => presetSteamIds.includes(mod.publishedId))
+      .map(mod => ({ name: mod.name, folderName: mod.folderName, local: false, fullPath: null }));
 
-    settings.enabledMods = newEnabledMods;
+    const localEnabled = localMods
+      .filter(mod => presetLocalPaths.includes(mod.fullPath))
+      .map(mod => ({ name: mod.name, folderName: mod.folderName, local: true, fullPath: mod.fullPath }));
+
+    settings.enabledMods = [...workshopEnabled, ...localEnabled];
     await saveSettings();
 
-    if (dayzGameWatchPath) {
-      const updatedMods = await scanWorkshopMods(dayzGameWatchPath);
-      broadcastUpdate("dayz:mods-updated", updatedMods);
-    }
+    const [updatedWorkshop, updatedLocal] = await Promise.all([
+      dayzGameWatchPath ? scanWorkshopMods(dayzGameWatchPath) : [],
+      scanLocalMods()
+    ]);
+    broadcastUpdate("dayz:mods-updated", [...updatedWorkshop, ...updatedLocal]);
   } catch (error) {
     console.error("Failed to apply preset:", error);
   }
@@ -589,30 +751,7 @@ ipcMain.handle("dayz:create-preset", async (_event, presetName) => {
   const filePath = path.join(PRESETS_DIR, filename);
   try {
     const settings = await getSettings();
-    const enabledMods = settings.enabledMods || [];
-
-    let mods = [];
-    if (dayzGameWatchPath) {
-      mods = await scanWorkshopMods(dayzGameWatchPath);
-    }
-
-    const enabledFolderNames = new Set(enabledMods.map(m => m.folderName));
-
-    const ids = mods
-      .filter(m => enabledFolderNames.has(m.folderName) && m.publishedId)
-      .map(m => m.publishedId);
-
-    const now = formatPresetDate(new Date());
-    const idXml = ids.map(id => `    <id>steam:${id}</id>`).join("\n");
-
-    const content = `<?xml version="1.0" encoding="utf-8"?>
-<addons-presets>
-  <last-update>${now}</last-update>
-  <published-ids>
-${idXml}
-  </published-ids>
-</addons-presets>`;
-
+    const content = await generatePresetContent(settings.enabledMods || []);
     await fsp.writeFile(filePath, content, "utf8");
     return { success: true };
   } catch (error) {
@@ -625,30 +764,7 @@ ipcMain.handle("dayz:save-preset", async (_event, filename) => {
   const filePath = path.join(PRESETS_DIR, filename);
   try {
     const settings = await getSettings();
-    const enabledMods = settings.enabledMods || [];
-
-    let mods = [];
-    if (dayzGameWatchPath) {
-      mods = await scanWorkshopMods(dayzGameWatchPath);
-    }
-
-    const enabledFolderNames = new Set(enabledMods.map(m => m.folderName));
-
-    const ids = mods
-      .filter(m => enabledFolderNames.has(m.folderName) && m.publishedId)
-      .map(m => m.publishedId);
-
-    const now = formatPresetDate(new Date());
-    const idXml = ids.map(id => `    <id>steam:${id}</id>`).join("\n");
-
-    const content = `<?xml version="1.0" encoding="utf-8"?>
-<addons-presets>
-  <last-update>${now}</last-update>
-  <published-ids>
-${idXml}
-  </published-ids>
-</addons-presets>`;
-
+    const content = await generatePresetContent(settings.enabledMods || []);
     await fsp.writeFile(filePath, content, "utf8");
     return { success: true };
   } catch (error) {
@@ -670,36 +786,56 @@ ipcMain.handle("dayz:delete-preset", async (_event, filename) => {
 });
 
 ipcMain.handle("dayz:check-preset-dirty", async (_event, filename) => {
+  if (filename === "__vanilla__") {
+    const settings = await getSettings();
+    return { dirty: (settings.enabledMods || []).length > 0 };
+  }
+
   const filePath = path.join(PRESETS_DIR, filename);
-  if (!(await pathExists(filePath))) return { dirty: false };
 
   try {
     const content = await fsp.readFile(filePath, "utf8");
-    const idRegex = /<id>steam:(\d+)<\/id>/g;
-    const presetIds = [];
+    const steamRegex = /<id>steam:(\d+)<\/id>/g;
+    const localRegex = /<id>local:([^<]+)<\/id>/g;
+    const presetSteamIds = [];
+    const presetLocalPaths = [];
     let match;
-    while ((match = idRegex.exec(content)) !== null) {
-      presetIds.push(match[1]);
+    while ((match = steamRegex.exec(content)) !== null) {
+      presetSteamIds.push(match[1]);
+    }
+    while ((match = localRegex.exec(content)) !== null) {
+      presetLocalPaths.push(match[1]);
     }
 
     const settings = await getSettings();
     const enabledMods = settings.enabledMods || [];
 
-    let mods = [];
-    if (dayzGameWatchPath) {
-      mods = await scanWorkshopMods(dayzGameWatchPath);
-    }
+    const [workshopMods, localMods] = await Promise.all([
+      dayzGameWatchPath ? scanWorkshopMods(dayzGameWatchPath) : [],
+      scanLocalMods()
+    ]);
 
     const enabledFolderNames = new Set(enabledMods.map(m => m.folderName));
-    const currentIds = mods
+
+    const currentSteamIds = workshopMods
       .filter(m => enabledFolderNames.has(m.folderName) && m.publishedId)
       .map(m => m.publishedId);
 
-    if (presetIds.length !== currentIds.length) return { dirty: true };
+    const currentLocalPaths = localMods
+      .filter(m => enabledFolderNames.has(m.folderName))
+      .map(m => m.fullPath);
 
-    const sortedPreset = [...presetIds].sort();
-    const sortedCurrent = [...currentIds].sort();
-    return { dirty: !sortedPreset.every((id, i) => id === sortedCurrent[i]) };
+    if (presetSteamIds.length !== currentSteamIds.length) return { dirty: true };
+    const sortedPreset = [...presetSteamIds].sort();
+    const sortedCurrent = [...currentSteamIds].sort();
+    if (!sortedPreset.every((id, i) => id === sortedCurrent[i])) return { dirty: true };
+
+    if (presetLocalPaths.length !== currentLocalPaths.length) return { dirty: true };
+    const sortedPresetLocal = [...presetLocalPaths].sort();
+    const sortedCurrentLocal = [...currentLocalPaths].sort();
+    if (!sortedPresetLocal.every((p, i) => p === sortedCurrentLocal[i])) return { dirty: true };
+
+    return { dirty: false };
   } catch {
     return { dirty: false };
   }
@@ -731,6 +867,76 @@ ipcMain.handle("dayz:save-setting", async (_event, key, value) => {
   const settings = await getSettings();
   settings[key] = value;
   await saveSettings();
+});
+
+ipcMain.handle("dayz:pick-folder", async () => {
+  const result = await dialog.showOpenDialog({ properties: ["openDirectory"] });
+  if (result.canceled || result.filePaths.length === 0) return null;
+  return result.filePaths[0];
+});
+
+ipcMain.handle("dayz:open-folder", async (_event, folderPath) => {
+  await shell.openPath(folderPath);
+});
+
+ipcMain.handle("dayz:import-local-mod", async (_event, sourcePath) => {
+  try {
+    const check = await isLocalModFolder(sourcePath);
+    if (!check) {
+      return { success: false, message: "Selected folder is not a valid DayZ mod (no meta.cpp or addons/*.pbo found)" };
+    }
+
+    if (dayzGameWatchPath) {
+      const workshopContentPath = path.join(dayzGameWatchPath, "..", "..", "workshop", "content", DAYZ_GAME_APP_ID);
+      if (path.resolve(sourcePath) === path.resolve(workshopContentPath)) {
+        return { success: false, message: "Workshop mods are already loaded automatically" };
+      }
+    }
+
+    const settings = await getSettings();
+    if (!settings.localModPaths) settings.localModPaths = [];
+    if (!settings.localModPaths.includes(sourcePath)) {
+      settings.localModPaths.push(sourcePath);
+      await saveSettings();
+      await setupLocalModsWatcher();
+      const [workshopMods, localMods] = await Promise.all([
+        dayzGameWatchPath ? scanWorkshopMods(dayzGameWatchPath) : [],
+        scanLocalMods()
+      ]);
+      broadcastUpdate("dayz:mods-updated", [...workshopMods, ...localMods]);
+    }
+    return { success: true };
+  } catch (error) {
+    return { success: false, message: error.message };
+  }
+});
+
+ipcMain.handle("dayz:add-local-mod-path", async (_event, modPath) => {
+  const settings = await getSettings();
+  const paths = settings.localModPaths || [];
+  if (!paths.includes(modPath)) {
+    paths.push(modPath);
+    settings.localModPaths = paths;
+    await saveSettings();
+  }
+  await setupLocalModsWatcher();
+  const [workshopMods, localMods] = await Promise.all([
+    dayzGameWatchPath ? scanWorkshopMods(dayzGameWatchPath) : [],
+    scanLocalMods()
+  ]);
+  broadcastUpdate("dayz:mods-updated", [...workshopMods, ...localMods]);
+});
+
+ipcMain.handle("dayz:remove-local-mod-path", async (_event, modPath) => {
+  const settings = await getSettings();
+  settings.localModPaths = (settings.localModPaths || []).filter(p => p !== modPath);
+  await saveSettings();
+  await setupLocalModsWatcher();
+  const [workshopMods, localMods] = await Promise.all([
+    dayzGameWatchPath ? scanWorkshopMods(dayzGameWatchPath) : [],
+    scanLocalMods()
+  ]);
+  broadcastUpdate("dayz:mods-updated", [...workshopMods, ...localMods]);
 });
 
 const MAP_STORAGE_PATHS = {
@@ -870,13 +1076,11 @@ async function generateGameBatch(dayzGamePath, enabledMods) {
 
   try {
     let batchContent = await fsp.readFile(templatePath, "utf8");
-    
-    
+
     const formattedMods = enabledMods
       .map(mod => "@" + mod.name.replace(/\s+/g, '').replace(/^@/, ''))
       .join(";");
 
-    
     batchContent = batchContent.replace(
       `-mod=`,
       `-mod=${formattedMods}`
@@ -972,22 +1176,32 @@ ipcMain.handle("dayz:launch", async (_event, dayzServerPath, map) => {
   let syncedCount = 0;
   let skipped = 0;
   let errors = [];  
-  
-  for (const mod of enabledMods) {
-    const sourcePath = path.join(workshopPath, mod.folderName);
-    const destFolderName = "@" + mod.name.replace(/\s+/g, '').replace(/^@/, '');
+
+  const [allWorkshopMods, allLocalMods] = await Promise.all([
+    scanWorkshopMods(dayzGameWatchPath),
+    scanLocalMods()
+  ]);
+  const modsByFolder = new Map();
+  for (const m of [...allWorkshopMods, ...allLocalMods]) {
+    modsByFolder.set(m.folderName, m);
+  }
+
+  for (const enabledMod of enabledMods) {
+    const fullInfo = modsByFolder.get(enabledMod.folderName) || enabledMod;
+    const sourcePath = fullInfo.local ? fullInfo.fullPath : path.join(workshopPath, fullInfo.folderName);
+    const destFolderName = "@" + fullInfo.name.replace(/\s+/g, '').replace(/^@/, '');
     const destPathServer = path.join(dayzServerPath, destFolderName);
     const destPathGame = path.join(gameWorkshopDest, destFolderName);
     
     if (!(await pathExists(sourcePath))) {
-      errors.push(`Mod folder not found: ${mod.folderName} (${mod.name})`);
+      errors.push(`Mod folder not found: ${fullInfo.folderName} (${fullInfo.name})`);
       continue;
     }    
 
     try {
       const sourceStat = await fsp.stat(sourcePath);
       const sourceMtime = sourceStat.mtimeMs;
-      const lastSync = lastSyncTimes[mod.folderName] || 0;
+      const lastSync = lastSyncTimes[fullInfo.folderName] || 0;
       
       const ensureCopy = async (source, dest) => {
         const exists = await pathExists(dest);
@@ -1016,18 +1230,18 @@ ipcMain.handle("dayz:launch", async (_event, dayzServerPath, map) => {
         if (sourceMtime > lastSync || serverCopied || gameCopied) {
           await fsp.cp(sourceKeysPath, destKeysPath, { recursive: true });
           keysSynced = true;
-          console.log(`Synced keys for: ${mod.name}`);
+          console.log(`Synced keys for: ${fullInfo.name}`);
         }
       }
 
       if (serverCopied || gameCopied || keysSynced) {
         syncedCount++;
-        lastSyncTimes[mod.folderName] = sourceMtime;
+        lastSyncTimes[fullInfo.folderName] = sourceMtime;
       } else {
         skipped++;
       }
     } catch (error) {
-      errors.push(`Failed to process ${mod.name}: ${error.message}`);
+      errors.push(`Failed to process ${fullInfo.name}: ${error.message}`);
     }
   }  
 
@@ -1075,7 +1289,7 @@ ipcMain.handle("dayz:launch", async (_event, dayzServerPath, map) => {
 
   return {
     success: errors.length === 0,
-    message: `Processed ${syncedCount} mod(s), ${skipped} already synced. Server starting...` + (errors.length > 0 ? `. Errors: ${errors.join(", ")}` : ""),
+    message: `Processed ${syncedCount} mod(s), ${skipped} already synced.` + (errors.length > 0 ? `. Errors: ${errors.join(", ")}` : ""),
     errors
   };
 });
@@ -1134,7 +1348,7 @@ function createWindow() {
 
   mainWindow.loadFile(path.join(__dirname, "index.html"));
 
-  // mainWindow.webContents.openDevTools({ mode: "detach" });
+  mainWindow.webContents.openDevTools({ mode: "detach" });
 
   mainWindow.on("closed", () => {
     mainWindow = null;
