@@ -59,18 +59,53 @@ importBtn?.addEventListener("click", (e) => {
 async function renderImportMenu() {
   importMenu.innerHTML = "";
   const row = document.createElement("div");
-  row.className = "mods-dropdown-btn-row";
+  row.className = "mods-import-input-row";
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "mods-dropdown-input";
+  input.placeholder = "Path...";
+  row.appendChild(input);
+  const addBtn = document.createElement("button");
+  addBtn.className = "mods-import-add-btn";
+  addBtn.textContent = "Add";
+  addBtn.disabled = true;
+  row.appendChild(addBtn);
   const btn = document.createElement("button");
-  btn.className = "mods-dropdown-btn";
+  btn.className = "mods-import-browse-btn";
   btn.textContent = "Browse";
+  function flashError() {
+    input.classList.add("mods-dropdown-input-error");
+    setTimeout(() => input.classList.remove("mods-dropdown-input-error"), 1500);
+  }
+  async function doImport(path) {
+    if (!path) return;
+    const result = await window.appInfo.importLocalMod(path);
+    if (!result.success) {
+      flashError();
+      return;
+    }
+    importMenu.classList.remove("open");
+    renderImportMenu();
+  }
+  function updateAddBtn() {
+    addBtn.disabled = !input.value.trim();
+  }
+  input.addEventListener("input", updateAddBtn);
+  addBtn.addEventListener("click", async (e) => {
+    e.stopPropagation();
+    await doImport(input.value.trim());
+  });
   btn.addEventListener("click", async (e) => {
     e.stopPropagation();
-    importMenu.classList.remove("open");
     const folder = await window.appInfo.pickFolder();
     if (folder) {
-      const result = await window.appInfo.importLocalMod(folder);
-      if (!result.success) console.warn("Import failed:", result.message);
-      renderImportMenu();
+      await doImport(folder);
+    }
+  });
+  input.addEventListener("keydown", async (e) => {
+    if (e.key === "Enter") {
+      e.stopPropagation();
+      await doImport(input.value.trim());
     }
   });
   row.appendChild(btn);
@@ -282,7 +317,7 @@ function renderModsList(mods) {
       folderCell.className = "col-folder-btn";
       const folderBtn = document.createElement("button");
       folderBtn.className = "mod-folder-btn";
-      folderBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>';
+      folderBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>';
       folderBtn.title = "Open mod folder";
       folderBtn.addEventListener("click", (e) => {
         e.stopPropagation();
@@ -506,12 +541,12 @@ function renderPresets(presets) {
   inputRow.appendChild(nameInput);
 
   const cancelBtn = document.createElement("button");
-  cancelBtn.className = "mods-dropdown-input-btn";
+  cancelBtn.className = "mods-dropdown-input-btn mods-dropdown-input-btn-cancel";
   cancelBtn.textContent = "✕";
   inputRow.appendChild(cancelBtn);
 
   const confirmBtn = document.createElement("button");
-  confirmBtn.className = "mods-dropdown-input-btn";
+  confirmBtn.className = "mods-dropdown-input-btn mods-dropdown-input-btn-confirm";
   confirmBtn.textContent = "✓";
   inputRow.appendChild(confirmBtn);
 

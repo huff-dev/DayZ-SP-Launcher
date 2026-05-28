@@ -113,7 +113,7 @@ header {
   top: 0;
   left: 0;
   width: 100%;
-  height: 30%;
+  height: 29%;
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
@@ -180,7 +180,7 @@ header {
 
 .mods-container {
   width: 50%;
-  background: #111111;
+  background: #141414;
   border-radius: 8px;
   box-shadow:
     0 4px 12px rgba(0, 0, 0, 0.35),
@@ -270,8 +270,8 @@ header {
   color: rgba(237, 234, 225, 0.6);
   position: sticky;
   top: 0;
-  background: #111111;
-  border-bottom: 1px solid rgba(237, 234, 225, 0.1);
+  background: #141414;
+  border-bottom: 1px solid rgba(237, 234, 225, 0.05);
 }
 
 .mods-header-top {
@@ -340,6 +340,7 @@ header {
   color: rgba(237, 234, 225, 0.6);
   cursor: pointer;
   white-space: nowrap;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 
 .mods-sort-item:hover {
@@ -558,20 +559,21 @@ header {
 }
 
 .mods-dropdown-item-row {
-  display: flex;
-  align-items: center;
+  position: relative;
   margin-bottom: 4px;
 }
 
 .mods-dropdown-item-label {
-  flex: 1;
-  padding: 4px 8px;
+  display: block;
+  padding: 4px 28px 4px 8px;
   font-size: 0.5rem;
   color: rgba(237, 234, 225, 0.6);
   cursor: pointer;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  border-radius: 3px;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 
 .mods-dropdown-item-label:hover {
@@ -587,6 +589,11 @@ header {
   display: flex;
   align-items: center;
   justify-content: center;
+
+  position: absolute;
+  right: 2px;
+  top: 50%;
+  transform: translateY(-50%);
 
   width: 22px;
   height: 22px;
@@ -632,6 +639,13 @@ header {
 .mods-dropdown-input-row {
   display: flex;
   gap: 4px;
+  margin-bottom: 8px;
+}
+
+.mods-import-input-row {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
 }
 
 .mods-dropdown-input {
@@ -670,10 +684,32 @@ header {
   line-height: 1;
   padding: 3px 5px;
   font-family: inherit;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.mods-dropdown-input-btn-cancel {
+  background: #432929;
+  border-color: rgba(237, 234, 225, 0.08);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.mods-dropdown-input-btn-cancel:hover {
+  background: #523232;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.mods-dropdown-input-btn-confirm {
+  background: #2d3f31;
+  border-color: rgba(237, 234, 225, 0.08);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.mods-dropdown-input-btn-confirm:hover {
+  background: #364b3a;
+  color: rgba(255, 255, 255, 0.9);
 }
 
 .mods-dropdown-input-btn:hover {
-  background: rgba(237, 234, 225, 0.08);
   color: rgba(237, 234, 225, 0.9);
 }
 
@@ -689,11 +725,69 @@ header {
   padding: 3px 6px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 
-.mods-dropdown-btn:hover:not(:disabled) {
+.mods-import-browse-btn {
+  flex: 0 1 auto;
+  background: rgba(237, 234, 225, 0.06);
+  border: 1px solid rgba(237, 234, 225, 0.12);
+  border-radius: 3px;
+  color: rgba(237, 234, 225, 0.6);
+  cursor: pointer;
+  font-size: 0.5rem;
+  font-family: inherit;
+  padding: 3px 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.mods-import-browse-btn {
+  /* flex: 1; */
+  background: rgba(237, 234, 225, 0.06);
+  border: 1px solid rgba(237, 234, 225, 0.12);
+  border-radius: 3px;
+  color: rgba(237, 234, 225, 0.6);
+  cursor: pointer;
+  font-size: 0.5rem;
+  font-family: inherit;
+  padding: 3px 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.mods-dropdown-btn:hover:not(:disabled),
+.mods-import-browse-btn:hover {
   background: rgba(237, 234, 225, 0.12);
   color: rgba(237, 234, 225, 0.9);
+}
+
+.mods-import-add-btn {
+  flex: 0 1 auto;
+  background: #2d3f31;
+  border: 1px solid rgba(237, 234, 225, 0.08);
+  border-radius: 3px;
+  color: rgba(255, 255, 255, 0.9);
+  cursor: pointer;
+  font-size: 0.5rem;
+  font-family: inherit;
+  padding: 3px 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.mods-import-add-btn:disabled {
+  background: #222222;
+  color: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.05);
+  cursor: default;
+}
+
+.mods-import-add-btn:hover:not(:disabled) {
+  background: #364b3a;
+  border-color: rgba(120, 160, 120, 0.18);
 }
 
 .mods-dropdown-btn:disabled {
@@ -983,7 +1077,7 @@ input[type="checkbox"] {
 }
 
 .options-container {
-  background: #111111;
+  background: #141414;
   border-radius: 8px;
   box-shadow:
     0 4px 12px rgba(0, 0, 0, 0.35),
@@ -1003,8 +1097,8 @@ input[type="checkbox"] {
   letter-spacing: 1px;
   color: rgba(237, 234, 225, 0.6);
   text-align: center;
-  background: #111111;
-  border-bottom: 1px solid rgba(237, 234, 225, 0.1);
+  background: #141414;
+  border-bottom: 1px solid rgba(237, 234, 225, 0.05);
   border-top-left-radius: 8px;
   border-top-right-radius: 8px;
 }

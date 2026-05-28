@@ -454,6 +454,8 @@ async function scanWorkshopMods(gamePath) {
       name: m.name,
       publishedId: m.publishedId,
       folderName: m.folderName,
+      fullPath: m.fullPath,
+      mtime: m.mtime,
       enabled: enabledMods.some(em => em.folderName === m.folderName),
       updated: m.updated
     }));
@@ -888,7 +890,9 @@ ipcMain.handle("dayz:import-local-mod", async (_event, sourcePath) => {
 
     if (dayzGameWatchPath) {
       const workshopContentPath = path.join(dayzGameWatchPath, "..", "..", "workshop", "content", DAYZ_GAME_APP_ID);
-      if (path.resolve(sourcePath) === path.resolve(workshopContentPath)) {
+      const resolvedSource = path.resolve(sourcePath);
+      const resolvedWorkshop = path.resolve(workshopContentPath);
+      if (resolvedSource === resolvedWorkshop || resolvedSource.startsWith(resolvedWorkshop + path.sep)) {
         return { success: false, message: "Workshop mods are already loaded automatically" };
       }
     }
