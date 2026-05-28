@@ -704,7 +704,7 @@ async function generatePresetContent(enabledMods) {
   const selectedMap = settings.selectedMap || "chernarus";
   const selectedMapEnv = settings.selectedMapEnv || "";
   const selectedMapEnvFolder = settings.selectedMapEnvFolder || "";
-  const hasMapSettings = selectedMap !== "chernarus" || selectedMapEnv || selectedMapEnvFolder;
+  const hasMapSettings = selectedMap === "custom";
   const mapXml = hasMapSettings ? `
   <map-settings>
     <selected-map>${selectedMap}</selected-map>${selectedMapEnv && selectedMapEnvFolder ? `
@@ -908,15 +908,17 @@ ipcMain.handle("dayz:check-preset-dirty", async (_event, filename) => {
     if (!sortedPresetLocal.every((p, i) => p === sortedCurrentLocal[i])) return { dirty: true };
 
     const mapMatch = content.match(/<selected-map>([^<]+)<\/selected-map>/);
-    const envFolderMatch = content.match(/<selected-env-folder>([^<]+)<\/selected-env-folder>/);
-    const envNameMatch = content.match(/<selected-env-name>([^<]+)<\/selected-env-name>/);
-    const presetSelectedMap = mapMatch ? mapMatch[1] : "chernarus";
-    const presetEnvFolder = envFolderMatch ? envFolderMatch[1] : "";
-    const presetEnvName = envNameMatch ? envNameMatch[1] : "";
+    if (mapMatch) {
+      const presetSelectedMap = mapMatch[1];
+      const envFolderMatch = content.match(/<selected-env-folder>([^<]+)<\/selected-env-folder>/);
+      const envNameMatch = content.match(/<selected-env-name>([^<]+)<\/selected-env-name>/);
+      const presetEnvFolder = envFolderMatch ? envFolderMatch[1] : "";
+      const presetEnvName = envNameMatch ? envNameMatch[1] : "";
 
-    if (presetSelectedMap !== (settings.selectedMap || "chernarus")) return { dirty: true };
-    if (presetEnvFolder !== (settings.selectedMapEnvFolder || "")) return { dirty: true };
-    if (presetEnvName !== (settings.selectedMapEnv || "")) return { dirty: true };
+      if (presetSelectedMap !== (settings.selectedMap || "chernarus")) return { dirty: true };
+      if (presetEnvFolder !== (settings.selectedMapEnvFolder || "")) return { dirty: true };
+      if (presetEnvName !== (settings.selectedMapEnv || "")) return { dirty: true };
+    }
 
     return { dirty: false };
   } catch {

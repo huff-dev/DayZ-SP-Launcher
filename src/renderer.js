@@ -283,13 +283,6 @@ function renderModsList(mods) {
     if (isDisabledMapMod) {
       row.classList.add("map-mod-disabled");
     }
-    if (mod.publishedId) {
-      row.addEventListener("click", (e) => {
-        if (e.target.tagName !== "INPUT") {
-          window.appInfo.openExternal(`steam://url/CommunityFilePage/${mod.publishedId}`);
-        }
-      });
-    }
 
     const enabledCell = document.createElement("td");
     enabledCell.className = "col-enabled";
@@ -326,6 +319,13 @@ function renderModsList(mods) {
     const nameSpan = document.createElement("span");
     nameSpan.className = "col-name-text";
     nameSpan.textContent = displayName;
+    if (mod.publishedId) {
+      nameSpan.style.cursor = "pointer";
+      nameSpan.addEventListener("click", (e) => {
+        e.stopPropagation();
+        window.appInfo.openExternal(`steam://url/CommunityFilePage/${mod.publishedId}`);
+      });
+    }
     wrap.appendChild(nameSpan);
     if (mod.local) {
       const badge = document.createElement("span");
