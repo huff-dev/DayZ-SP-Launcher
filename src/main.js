@@ -324,6 +324,12 @@ ipcMain.handle("dayz:scan-presets", async () => {
   return await scanPresets();
 });
 
+ipcMain.handle("dayz:open-presets-folder", async () => {
+  if (await pathExists(PRESETS_DIR)) {
+    shell.openPath(PRESETS_DIR);
+  }
+});
+
 let isServerRunning = false;
 let isGameRunning = false;
 let wasPatched = false;
@@ -431,7 +437,6 @@ async function scanWorkshopMods(gamePath) {
         const stat = await fsp.stat(modFolderPath);
         const sourceMtime = stat.mtimeMs;
         
-        
         const lastSync = lastSyncTimes[f.name] || 0;
         const wasUpdated = sourceMtime > lastSync;
         
@@ -441,7 +446,8 @@ async function scanWorkshopMods(gamePath) {
           folderName: f.name, 
           fullPath: modFolderPath,
           mtime: sourceMtime,
-          updated: wasUpdated
+          updated: wasUpdated,
+          mapEnvs: await getMapEnvs(modFolderPath)
         });
         
         lastModTimes.set(modFolderPath, sourceMtime);
@@ -456,6 +462,7 @@ async function scanWorkshopMods(gamePath) {
       folderName: m.folderName,
       fullPath: m.fullPath,
       mtime: m.mtime,
+      mapEnvs: m.mapEnvs,
       enabled: enabledMods.some(em => em.folderName === m.folderName),
       updated: m.updated
     }));
@@ -476,6 +483,31 @@ async function isLocalModFolder(folderPath) {
     if (!addonFiles.some(f => f.endsWith(".pbo"))) return null;
   } catch { return null; }
   return { hasMeta: false, name: folderName };
+}
+
+async function getMapEnvs(folderPath) {
+  try {
+    const results = [];
+    await findFiles(folderPath, "cfgenvironment.xml", 5, results);
+    return results.map(fullPath => path.relative(folderPath, path.dirname(fullPath)));
+  } catch {
+    return [];
+  }
+}
+
+async function findFiles(dir, target, maxDepth, results) {
+  if (maxDepth <= 0) return;
+  try {
+    const entries = await fsp.readdir(dir, { withFileTypes: true });
+    for (const e of entries) {
+      const fullPath = path.join(dir, e.name);
+      if (e.isDirectory()) {
+        await findFiles(fullPath, target, maxDepth - 1, results);
+      } else if (e.isFile() && e.name.toLowerCase() === target.toLowerCase()) {
+        results.push(fullPath);
+      }
+    }
+  } catch {}
 }
 
 async function scanLocalMods() {
@@ -506,7 +538,8 @@ async function scanLocalMods() {
           fullPath: parentPath,
           mtime: stat.mtimeMs,
           updated: false,
-          local: true
+          local: true,
+          mapEnvs: await getMapEnvs(parentPath)
         });
         continue;
       }
@@ -534,7 +567,8 @@ async function scanLocalMods() {
           fullPath: modFolderPath,
           mtime: stat.mtimeMs,
           updated: false,
-          local: true
+          local: true,
+          mapEnvs: await getMapEnvs(modFolderPath)
         });
       }
     }
@@ -666,12 +700,24 @@ async function generatePresetContent(enabledMods) {
     ...localPaths.map(p => `    <id>local:${p}</id>`)
   ].join("\n");
 
+  const settings = await getSettings();
+  const selectedMap = settings.selectedMap || "chernarus";
+  const selectedMapEnv = settings.selectedMapEnv || "";
+  const selectedMapEnvFolder = settings.selectedMapEnvFolder || "";
+  const hasMapSettings = selectedMap !== "chernarus" || selectedMapEnv || selectedMapEnvFolder;
+  const mapXml = hasMapSettings ? `
+  <map-settings>
+    <selected-map>${selectedMap}</selected-map>${selectedMapEnv && selectedMapEnvFolder ? `
+    <selected-env-folder>${selectedMapEnvFolder}</selected-env-folder>
+    <selected-env-name>${selectedMapEnv}</selected-env-name>` : ""}
+  </map-settings>` : "";
+
   return `<?xml version="1.0" encoding="utf-8"?>
 <addons-presets>
   <last-update>${now}</last-update>
   <published-ids>
 ${idXml}
-  </published-ids>
+  </published-ids>${mapXml}
 </addons-presets>`;
 }
 
@@ -679,13 +725,15 @@ ipcMain.handle("dayz:apply-preset", async (_event, filename) => {
   if (filename === "__vanilla__") {
     const settings = await getSettings();
     settings.enabledMods = [];
+    delete settings.selectedMapEnv;
+    delete settings.selectedMapEnvFolder;
     await saveSettings();
     const [updatedWorkshop, updatedLocal] = await Promise.all([
       dayzGameWatchPath ? scanWorkshopMods(dayzGameWatchPath) : [],
       scanLocalMods()
     ]);
     broadcastUpdate("dayz:mods-updated", [...updatedWorkshop, ...updatedLocal]);
-    return;
+    return { selectedMap: "chernarus", selectedMapEnv: "", mods: [] };
   }
 
   const presetPath = path.join(PRESETS_DIR, filename);
@@ -705,6 +753,13 @@ ipcMain.handle("dayz:apply-preset", async (_event, filename) => {
       presetLocalPaths.push(match[1]);
     }
 
+    const mapMatch = content.match(/<selected-map>([^<]+)<\/selected-map>/);
+    const envFolderMatch = content.match(/<selected-env-folder>([^<]+)<\/selected-env-folder>/);
+    const envNameMatch = content.match(/<selected-env-name>([^<]+)<\/selected-env-name>/);
+    const presetSelectedMap = mapMatch ? mapMatch[1] : null;
+    const presetEnvFolder = envFolderMatch ? envFolderMatch[1] : null;
+    const presetEnvName = envNameMatch ? envNameMatch[1] : null;
+
     const settings = await getSettings();
     const [workshopMods, localMods] = await Promise.all([
       dayzGameWatchPath ? scanWorkshopMods(dayzGameWatchPath) : [],
@@ -720,6 +775,15 @@ ipcMain.handle("dayz:apply-preset", async (_event, filename) => {
       .map(mod => ({ name: mod.name, folderName: mod.folderName, local: true, fullPath: mod.fullPath }));
 
     settings.enabledMods = [...workshopEnabled, ...localEnabled];
+    if (presetSelectedMap) settings.selectedMap = presetSelectedMap;
+    else delete settings.selectedMap;
+    if (presetEnvFolder && presetEnvName) {
+      settings.selectedMapEnvFolder = presetEnvFolder;
+      settings.selectedMapEnv = presetEnvName;
+    } else {
+      delete settings.selectedMapEnvFolder;
+      delete settings.selectedMapEnv;
+    }
     await saveSettings();
 
     const [updatedWorkshop, updatedLocal] = await Promise.all([
@@ -727,6 +791,12 @@ ipcMain.handle("dayz:apply-preset", async (_event, filename) => {
       scanLocalMods()
     ]);
     broadcastUpdate("dayz:mods-updated", [...updatedWorkshop, ...updatedLocal]);
+    return {
+      selectedMap: presetSelectedMap || "chernarus",
+      selectedMapEnv: presetEnvName || "",
+      selectedMapEnvFolder: presetEnvFolder || "",
+      mods: [...updatedWorkshop, ...updatedLocal]
+    };
   } catch (error) {
     console.error("Failed to apply preset:", error);
   }
@@ -836,6 +906,17 @@ ipcMain.handle("dayz:check-preset-dirty", async (_event, filename) => {
     const sortedPresetLocal = [...presetLocalPaths].sort();
     const sortedCurrentLocal = [...currentLocalPaths].sort();
     if (!sortedPresetLocal.every((p, i) => p === sortedCurrentLocal[i])) return { dirty: true };
+
+    const mapMatch = content.match(/<selected-map>([^<]+)<\/selected-map>/);
+    const envFolderMatch = content.match(/<selected-env-folder>([^<]+)<\/selected-env-folder>/);
+    const envNameMatch = content.match(/<selected-env-name>([^<]+)<\/selected-env-name>/);
+    const presetSelectedMap = mapMatch ? mapMatch[1] : "chernarus";
+    const presetEnvFolder = envFolderMatch ? envFolderMatch[1] : "";
+    const presetEnvName = envNameMatch ? envNameMatch[1] : "";
+
+    if (presetSelectedMap !== (settings.selectedMap || "chernarus")) return { dirty: true };
+    if (presetEnvFolder !== (settings.selectedMapEnvFolder || "")) return { dirty: true };
+    if (presetEnvName !== (settings.selectedMapEnv || "")) return { dirty: true };
 
     return { dirty: false };
   } catch {
@@ -956,7 +1037,11 @@ ipcMain.handle("dayz:check-storage", async (_event, map) => {
   }
 
   const relativePath = MAP_STORAGE_PATHS[map];
-  if (!relativePath) return false;
+  if (!relativePath) {
+    const customPath = path.join("mpmissions", map, "storage_1");
+    const fullPath = path.join(dayzServerWatchPath, customPath);
+    return await pathExists(fullPath);
+  }
 
   const fullPath = path.join(dayzServerWatchPath, relativePath);
   return await pathExists(fullPath);
@@ -985,7 +1070,11 @@ ipcMain.handle("dayz:check-cf-warning", async (_event, map) => {
   if (!hasCF) return false;
 
   const relativePath = MAP_STORAGE_PATHS[map];
-  if (!relativePath) return false;
+  if (!relativePath) {
+    const customPath = path.join("mpmissions", map, "storage_1", "communityframework");
+    const fullPath = path.join(dayzServerWatchPath, customPath);
+    return !(await pathExists(fullPath));
+  }
 
   const fullPath = path.join(dayzServerWatchPath, relativePath, "communityframework");
   return !(await pathExists(fullPath));
@@ -998,7 +1087,20 @@ ipcMain.handle("dayz:delete-storage", async (_event, map) => {
   }
 
   const relativePath = MAP_STORAGE_PATHS[map];
-  if (!relativePath) return false;
+  if (!relativePath) {
+    const customPath = path.join("mpmissions", map, "storage_1");
+    const fullPath = path.join(dayzServerWatchPath, customPath);
+    try {
+      if (await pathExists(fullPath)) {
+        await fsp.rm(fullPath, { recursive: true, force: true });
+        console.log(`Deleted storage for ${map} at ${fullPath}`);
+      }
+      return true;
+    } catch (error) {
+      console.error(`Failed to delete storage for ${map}:`, error);
+      return false;
+    }
+  }
 
   const fullPath = path.join(dayzServerWatchPath, relativePath);
   try {
@@ -1013,7 +1115,7 @@ ipcMain.handle("dayz:delete-storage", async (_event, map) => {
   }
 });
 
-async function generateServerConfig(dayzServerPath, map) {
+async function generateServerConfig(dayzServerPath, map, envFolder) {
   const templatePath = path.join(__dirname, "scripts", "DayzSPL.cfg");
   const destConfigPath = path.join(dayzServerPath, "DayzSPL.cfg");
 
@@ -1026,8 +1128,7 @@ async function generateServerConfig(dayzServerPath, map) {
       sakhal: "dayzOffline.sakhal"
     };
 
-    const selectedTemplate = missionTemplates[map] || missionTemplates.chernarus;
-    
+    const selectedTemplate = envFolder ? path.basename(envFolder) : (missionTemplates[map] || missionTemplates.chernarus);
     
     configContent = configContent.replace(
       /template\s*=\s*"[^"]*";/,
@@ -1098,14 +1199,14 @@ async function generateGameBatch(dayzGamePath, enabledMods) {
   }
 }
 
-async function applyQuickJoin(dayzServerPath, map, value) {
+async function applyQuickJoin(dayzServerPath, map, value, envFolder) {
   const missionFolders = {
     chernarus: "dayzOffline.chernarusplus",
     livonia: "dayzOffline.enoch",
     sakhal: "dayzOffline.sakhal"
   };
 
-  const folderName = missionFolders[map];
+  const folderName = envFolder ? path.basename(envFolder) : missionFolders[map];
   if (!folderName) return;
 
   const globalsPath = path.join(dayzServerPath, "mpmissions", folderName, "db", "globals.xml");
@@ -1145,6 +1246,41 @@ ipcMain.handle("dayz:launch", async (_event, dayzServerPath, map) => {
     return { success: false, message: "DayZ Game path not found" };
   }
 
+  // Scan all mods once - used for env detection and mod copy
+  const workshopPath = path.join(dayzGameWatchPath, "..", "..", "workshop", "content", DAYZ_GAME_APP_ID);
+  if (!(await pathExists(workshopPath))) {
+    return { success: false, message: "Workshop content directory not found" };
+  }
+  const [allWorkshopMods, allLocalMods] = await Promise.all([
+    scanWorkshopMods(dayzGameWatchPath),
+    scanLocalMods()
+  ]);
+  const modsByFolder = new Map();
+  for (const m of [...allWorkshopMods, ...allLocalMods]) {
+    modsByFolder.set(m.folderName, m);
+  }
+
+  // Determine custom map env folder and source mod
+  let customEnvFolder = "";
+  let customEnvModFolder = "";
+  if (map === "custom") {
+    const selectedEnv = settings.selectedMapEnv || "";
+    const selectedEnvFolder = settings.selectedMapEnvFolder || "";
+    if (selectedEnv && selectedEnvFolder && enabledMods.some(em => em.folderName === selectedEnvFolder)) {
+      customEnvFolder = selectedEnv;
+      customEnvModFolder = selectedEnvFolder;
+    } else {
+      // Single-env map mod: find first enabled mod with mapEnvs
+      for (const [, m] of modsByFolder) {
+        if (m.mapEnvs && m.mapEnvs.length > 0 && enabledMods.some(em => em.folderName === m.folderName)) {
+          customEnvFolder = m.mapEnvs[0];
+          customEnvModFolder = m.folderName;
+          break;
+        }
+      }
+    }
+  }
+
   try {
     const profilesPath = path.join(dayzServerPath, "Profiles", "DayzSPL");
     if (await pathExists(profilesPath)) {
@@ -1159,36 +1295,19 @@ ipcMain.handle("dayz:launch", async (_event, dayzServerPath, map) => {
       }
     }
 
-    await generateServerConfig(dayzServerPath, map);
+    await generateServerConfig(dayzServerPath, map, customEnvFolder);
     await generateServerBatch(dayzServerPath, enabledMods);
     await generateGameBatch(dayzGameWatchPath, enabledMods);
-
-    const timerValue = settings.quickJoin ? 0 : 15;
-    await applyQuickJoin(dayzServerPath, map, timerValue);
   } catch (error) {
     return { success: false, message: `Failed to generate launch files: ${error.message}` };
   }
 
   
-  const workshopPath = path.join(dayzGameWatchPath, "..", "..", "workshop", "content", DAYZ_GAME_APP_ID);
   const gameWorkshopDest = dayzGameWatchPath;
-  
-  if (!(await pathExists(workshopPath))) {
-    return { success: false, message: "Workshop content directory not found" };
-  }
 
   let syncedCount = 0;
   let skipped = 0;
-  let errors = [];  
-
-  const [allWorkshopMods, allLocalMods] = await Promise.all([
-    scanWorkshopMods(dayzGameWatchPath),
-    scanLocalMods()
-  ]);
-  const modsByFolder = new Map();
-  for (const m of [...allWorkshopMods, ...allLocalMods]) {
-    modsByFolder.set(m.folderName, m);
-  }
+  let errors = [];
 
   for (const enabledMod of enabledMods) {
     const fullInfo = modsByFolder.get(enabledMod.folderName) || enabledMod;
@@ -1253,7 +1372,29 @@ ipcMain.handle("dayz:launch", async (_event, dayzServerPath, map) => {
   settings.lastSyncTimes = lastSyncTimes;
   await saveSettings();
 
-  
+  // Copy map env folder to mpmissions for custom maps
+  if (customEnvFolder && customEnvModFolder) {
+    const modInfo = modsByFolder.get(customEnvModFolder);
+    if (modInfo) {
+      const modSourcePath = modInfo.local ? modInfo.fullPath : path.join(workshopPath, modInfo.folderName);
+      const envSourcePath = path.join(modSourcePath, customEnvFolder);
+      const envDestName = path.basename(customEnvFolder);
+      const envDestPath = path.join(dayzServerPath, "mpmissions", envDestName);
+      if (await pathExists(envSourcePath)) {
+        if (await pathExists(envDestPath)) {
+          await fsp.rm(envDestPath, { recursive: true, force: true });
+        }
+        await fsp.cp(envSourcePath, envDestPath, { recursive: true });
+        console.log(`Copied map env "${envDestName}" to mpmissions`);
+      } else {
+        errors.push(`Map environment folder not found: ${envSourcePath}`);
+      }
+    }
+  }
+
+  const timerValue = settings.quickJoin ? 0 : 15;
+  await applyQuickJoin(dayzServerPath, map, timerValue, customEnvFolder);
+
   const serverExePath = path.join(dayzServerPath, "DayZServer_x64.exe");
   lastServerExePath = serverExePath;
   if (settings.disableBE) {
@@ -1352,7 +1493,7 @@ function createWindow() {
 
   mainWindow.loadFile(path.join(__dirname, "index.html"));
 
-  mainWindow.webContents.openDevTools({ mode: "detach" });
+  // mainWindow.webContents.openDevTools({ mode: "detach" });
 
   mainWindow.on("closed", () => {
     mainWindow = null;

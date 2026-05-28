@@ -34,6 +34,7 @@
           <button class="map-option" data-map="sakhal">
             Sakhal
           </button>
+          <button class="map-option" data-map="custom">Custom</button>
         </nav>
       </section>
 
@@ -120,6 +121,16 @@
           <div class="confirm-actions">
             <button id="cf-proceed" class="mini-button proceed">Proceed</button>
             <button id="cf-cancel" class="mini-button cancel">Cancel</button>
+          </div>
+        </div>
+        <div id="error-dialog" class="confirm-container hidden">
+          <div id="error-dialog-text" class="confirm-text error-scroll"></div>
+          <div class="confirm-actions">
+            <button id="error-dialog-copy" class="mini-button proceed">
+              <span id="copy-btn-text">Copy</span>
+              <span id="copy-check" class="copy-check">✓</span>
+            </button>
+            <button id="error-dialog-ok" class="mini-button proceed">OK</button>
           </div>
         </div>
       </div>

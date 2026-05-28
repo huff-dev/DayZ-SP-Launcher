@@ -47,6 +47,7 @@ contextBridge.exposeInMainWorld("appInfo", {
   checkUpdate: () => ipcRenderer.invoke("dayz:check-update"),
   openExternal: (url) => ipcRenderer.invoke("dayz:open-external", url),
   openFolder: (folderPath) => ipcRenderer.invoke("dayz:open-folder", folderPath),
+  openPresetsFolder: () => ipcRenderer.invoke("dayz:open-presets-folder"),
   pickFolder: () => ipcRenderer.invoke("dayz:pick-folder"),
   importLocalMod: (sourcePath) => ipcRenderer.invoke("dayz:import-local-mod", sourcePath),
   addLocalModPath: (modPath) => ipcRenderer.invoke("dayz:add-local-mod-path", modPath),

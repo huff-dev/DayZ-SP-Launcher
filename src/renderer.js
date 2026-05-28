@@ -1,6 +1,8 @@
 const appName = window.appInfo?.name ?? "Electron";
 document.title = appName;
 
+let currentMap = "chernarus";
+
 const serverIndicator = document.querySelector("[data-server-indicator]");
 const gameIndicator = document.querySelector("[data-game-indicator]");
 const bgLayers = [document.getElementById("bg-1"), document.getElementById("bg-2")];
@@ -154,6 +156,7 @@ let isServerRunningLocal = false;
 let allMods = [];
 let launchHadErrors = false;
 let sortMode = "name";
+let selectedMapEnv = {};
 
 const sortLabel = document.getElementById("mods-label-wrapper");
 const sortMenu = document.getElementById("mods-sort-menu");
@@ -233,6 +236,9 @@ function filterMods() {
     const displayName = (mod.name.startsWith("@") ? mod.name.slice(1) : mod.name).toLowerCase();
     return displayName.includes(query);
   });
+  if (currentMap !== "custom") {
+    filtered = filtered.filter(mod => !(mod.mapEnvs?.length > 0));
+  }
   filtered = sortMods(filtered);
   renderModsList(filtered);
 }
@@ -263,12 +269,19 @@ function renderModsList(mods) {
     }
   }
 
+  const activeMapMod = mods.find(m => m.mapEnvs?.length > 0 && m.enabled);
+
   mods.forEach(mod => {
     const row = document.createElement("tr");
     row.classList.add("mod-row");
     const modKey = (mod.name || "").replace(/^@/, "").toLowerCase();
     if (duplicateFolders.has(modKey) && mod.enabled) {
       row.classList.add("duplicate");
+    }
+    const isMapMod = mod.mapEnvs?.length > 0;
+    const isDisabledMapMod = isMapMod && activeMapMod && mod !== activeMapMod;
+    if (isDisabledMapMod) {
+      row.classList.add("map-mod-disabled");
     }
     if (mod.publishedId) {
       row.addEventListener("click", (e) => {
@@ -283,7 +296,20 @@ function renderModsList(mods) {
     const checkbox = document.createElement("input");
     checkbox.type = "checkbox";
     checkbox.checked = mod.enabled;
+    if (isDisabledMapMod) checkbox.disabled = true;
     checkbox.addEventListener("change", () => {
+      if (mod.mapEnvs?.length > 0 && checkbox.checked) {
+        allMods.forEach(other => {
+          if (other !== mod && other.mapEnvs?.length > 0 && other.enabled) {
+            window.appInfo.toggleMod(other, false);
+          }
+        });
+      }
+      if (!checkbox.checked) {
+        delete selectedMapEnv[mod.folderName];
+        window.appInfo.saveSetting("selectedMapEnv", "");
+        window.appInfo.saveSetting("selectedMapEnvFolder", "");
+      }
       window.appInfo.toggleMod(mod, checkbox.checked);
       if (selectedPreset) {
         presetDirty = true;
@@ -307,6 +333,12 @@ function renderModsList(mods) {
       badge.textContent = "local";
       wrap.appendChild(badge);
     }
+    if (mod.mapEnvs?.length > 0) {
+      const badge = document.createElement("span");
+      badge.className = "map-badge";
+      badge.textContent = mod.mapEnvs.length > 1 ? "map+" : "map";
+      wrap.appendChild(badge);
+    }
     nameCell.appendChild(wrap);
 
     row.appendChild(enabledCell);
@@ -327,9 +359,70 @@ function renderModsList(mods) {
       row.appendChild(folderCell);
     }
     modsList.appendChild(row);
+
+    if (mod.enabled && mod.mapEnvs && mod.mapEnvs.length > 1) {
+      row.classList.add("mod-row-has-envs");
+      const envRows = [];
+      const activeEnv = selectedMapEnv[mod.folderName];
+      for (const envName of mod.mapEnvs) {
+        const isActive = envName === activeEnv;
+        const envRow = document.createElement("tr");
+        envRow.className = "mod-env-row";
+        if (activeEnv && !isActive) envRow.classList.add("mod-env-disabled");
+        const envEnabledCell = document.createElement("td");
+        envEnabledCell.className = "col-enabled";
+        envRow.appendChild(envEnabledCell);
+        const envNameCell = document.createElement("td");
+        envNameCell.className = "col-name";
+        const envWrap = document.createElement("div");
+        envWrap.className = "col-name-wrap";
+        const envCheckbox = document.createElement("input");
+        envCheckbox.type = "checkbox";
+        envCheckbox.checked = isActive;
+        envCheckbox.disabled = !!activeEnv && !isActive;
+        envCheckbox.addEventListener("change", () => {
+          if (envCheckbox.checked) {
+            selectedMapEnv[mod.folderName] = envName;
+            window.appInfo.saveSetting("selectedMapEnv", envName);
+            window.appInfo.saveSetting("selectedMapEnvFolder", mod.folderName);
+            envRows.forEach(r => {
+              const cb = r.querySelector("input[type=checkbox]");
+              if (cb !== envCheckbox) {
+                cb.checked = false;
+                cb.disabled = true;
+                r.classList.add("mod-env-disabled");
+              }
+            });
+          } else {
+            delete selectedMapEnv[mod.folderName];
+            window.appInfo.saveSetting("selectedMapEnv", "");
+            window.appInfo.saveSetting("selectedMapEnvFolder", "");
+            envRows.forEach(r => {
+              const cb = r.querySelector("input[type=checkbox]");
+              cb.disabled = false;
+              r.classList.remove("mod-env-disabled");
+            });
+          }
+          updateButtonsState(isServerRunningLocal);
+        });
+        envWrap.appendChild(envCheckbox);
+        const envNameSpan = document.createElement("span");
+        envNameSpan.className = "col-env-name";
+        envNameSpan.textContent = envName.split(/[\\/]/).pop();
+        envWrap.appendChild(envNameSpan);
+        envNameCell.appendChild(envWrap);
+        envRow.appendChild(envNameCell);
+        const envFolderCell = document.createElement("td");
+        envFolderCell.className = "col-folder-btn";
+        envRow.appendChild(envFolderCell);
+        modsList.appendChild(envRow);
+        envRows.push(envRow);
+      }
+    }
   });
 
   checkDirty();
+  updateButtonsState(isServerRunningLocal);
 }
 
 function renderMods(mods) {
@@ -342,6 +435,7 @@ const mapBackgrounds = {
   chernarus: 'images/chernarus.png',
   livonia: 'images/livonia.png',
   sakhal: 'images/sakhal.png',
+  custom: 'images/custom.png',
 };
 
 async function updateStorageStatus(map) {
@@ -352,27 +446,29 @@ async function updateStorageStatus(map) {
 }
 
 function setBackground(map) {
+  currentMap = map;
   const imageUrl = mapBackgrounds[map];
-  if (!imageUrl) return;
 
-  const nextLayerIndex = 1 - activeLayerIndex;
-  const currentLayer = bgLayers[activeLayerIndex];
-  const nextLayer = bgLayers[nextLayerIndex];  
-  
-  nextLayer.style.backgroundImage = `url('${imageUrl}')`;
-  nextLayer.classList.add("active");
-  currentLayer.classList.remove("active");
+  if (imageUrl) {
+    const nextLayerIndex = 1 - activeLayerIndex;
+    const currentLayer = bgLayers[activeLayerIndex];
+    const nextLayer = bgLayers[nextLayerIndex];  
+    
+    nextLayer.style.backgroundImage = `url('${imageUrl}')`;
+    nextLayer.classList.add("active");
+    currentLayer.classList.remove("active");
 
-  activeLayerIndex = nextLayerIndex;
+    activeLayerIndex = nextLayerIndex;
+  }
+
   mapOptions.forEach(opt => {
     opt.classList.toggle("active", opt.dataset.map === map);
   });
   
-  
   window.appInfo?.saveSetting?.("selectedMap", map);
   
-  
-  updateStorageStatus(map);
+  updateButtonsState(isServerRunningLocal);
+  filterMods();
 }
 
 mapOptions.forEach(btn => {
@@ -405,6 +501,13 @@ offlineModeCheckbox?.addEventListener("change", () => {
   if (disableBECheckbox) disableBECheckbox.checked = disableBE;
   if (offlineModeCheckbox) offlineModeCheckbox.checked = offlineMode;
 
+  const envName = settings.selectedMapEnv || "";
+  const envFolderName = settings.selectedMapEnvFolder || "";
+  if (envName && envFolderName) {
+    selectedMapEnv[envFolderName] = envName;
+  }
+
+  currentMap = savedMap;
   mapOptions.forEach(opt => {
     opt.classList.toggle("active", opt.dataset.map === savedMap);
   });
@@ -413,7 +516,8 @@ offlineModeCheckbox?.addEventListener("change", () => {
   bgLayers.forEach((layer, i) => {
     if (i === savedIndex) {
       layer.classList.add("active");
-      layer.style.backgroundImage = `url('${mapBackgrounds[savedMap]}')`;
+      const url = mapBackgrounds[savedMap];
+      if (url) layer.style.backgroundImage = `url('${url}')`;
     } else {
       layer.classList.remove("active");
     }
@@ -422,6 +526,7 @@ offlineModeCheckbox?.addEventListener("change", () => {
   
   
   updateStorageStatus(savedMap);
+  filterMods();
 })();
 
 function setStatusIndicator(indicator, state, label) {
@@ -495,6 +600,32 @@ function checkDirty() {
       updateLabel();
     }
   });
+}
+
+async function handleApplyPreset(filename) {
+  const result = await window.appInfo.applyPreset(filename);
+  if (!result) return;
+
+  Object.keys(selectedMapEnv).forEach(k => delete selectedMapEnv[k]);
+
+  if (result.selectedMapEnv && result.selectedMapEnvFolder) {
+    selectedMapEnv[result.selectedMapEnvFolder] = result.selectedMapEnv;
+  }
+
+  if (result.mods?.length) {
+    renderMods(result.mods);
+  }
+
+  if (result.selectedMap) {
+    const activeMap = document.querySelector(".map-option.active")?.dataset.map || "chernarus";
+    if (result.selectedMap !== activeMap) {
+      setBackground(result.selectedMap);
+    } else {
+      currentMap = result.selectedMap;
+      filterMods();
+      updateButtonsState(isServerRunningLocal);
+    }
+  }
 }
 
 function renderPresets(presets) {
@@ -615,11 +746,21 @@ function renderPresets(presets) {
     label.textContent = preset.name;
     label.addEventListener("click", () => {
       selectPreset(preset.name, preset.filename, preset.isDefault);
-      window.appInfo.applyPreset(preset.filename);
+      handleApplyPreset(preset.filename);
     });
     row.appendChild(label);
 
     if (!preset.isDefault) {
+      const folderBtn = document.createElement("button");
+      folderBtn.className = "mods-dropdown-folder-btn";
+      folderBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>';
+      folderBtn.title = "Open presets folder";
+      folderBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        window.appInfo.openPresetsFolder();
+      });
+      row.appendChild(folderBtn);
+
       const delBtn = document.createElement("button");
       delBtn.className = "mods-dropdown-del-btn";
       delBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>';
@@ -658,12 +799,12 @@ function renderPresets(presets) {
     const match = presets.find(p => p.name === pendingNewPreset);
     if (match) {
       selectPreset(match.name, match.filename, match.isDefault);
-      window.appInfo.applyPreset(match.filename);
+      handleApplyPreset(match.filename);
     }
     pendingNewPreset = null;
   } else if (!selectedPreset && presets.length > 0) {
     selectPreset(presets[0].name, presets[0].filename, presets[0].isDefault);
-    window.appInfo.applyPreset(presets[0].filename);
+    handleApplyPreset(presets[0].filename);
   } else if (selectedPreset && !currentPresetFilename) {
     const match = presets.find(p => p.name === selectedPreset);
     if (match) {
@@ -743,6 +884,11 @@ const cfConfirmContainer = document.getElementById("cf-confirm");
 const cfProceedBtn = document.getElementById("cf-proceed");
 const cfCancelBtn = document.getElementById("cf-cancel");
 
+const errorDialog = document.getElementById("error-dialog");
+const errorDialogText = document.getElementById("error-dialog-text");
+const errorDialogOk = document.getElementById("error-dialog-ok");
+const errorDialogCopy = document.getElementById("error-dialog-copy");
+
 function showConfirmDialog(container, proceedBtn, cancelBtn) {
   return new Promise(resolve => {
     container.classList.remove("hidden");
@@ -779,14 +925,27 @@ async function handleLaunch(isNewGame = false, forceDelete = false) {
   confirmContainer?.classList.add("hidden");
 
   
+  let targetMap = activeMap;
+  if (activeMap === "custom") {
+    const enabledMapMod = allMods.find(m => m.mapEnvs?.length > 0 && m.enabled);
+    if (enabledMapMod) {
+      const envRelPath = enabledMapMod.mapEnvs.length === 1
+        ? enabledMapMod.mapEnvs[0]
+        : selectedMapEnv[enabledMapMod.folderName];
+      targetMap = envRelPath?.split(/[\\/]/).pop() || "";
+    } else {
+      targetMap = "";
+    }
+  }
+
   if (isNewGame || forceDelete) {
     statusText.textContent = "Wiping previous save...";
-    await window.appInfo.deleteMapStorage(activeMap);
+    if (targetMap) await window.appInfo.deleteMapStorage(targetMap);
   }
 
   
   if (!isNewGame && !forceDelete) {
-    const needsWarning = await window.appInfo.checkCFWarning(activeMap);
+    const needsWarning = await window.appInfo.checkCFWarning(targetMap || activeMap);
     if (needsWarning) {
       button.disabled = true;
       if (continueBtn) continueBtn.disabled = true;
@@ -827,12 +986,14 @@ async function handleLaunch(isNewGame = false, forceDelete = false) {
   spinner.classList.add("hidden");
   
   if (!isServerRunningLocal) {
-    statusText.textContent = result.message;
     if (result.errors?.length) {
-      statusText.style.color = "#e06c75";
       launchHadErrors = true;
+      statusText.textContent = "";
+      errorDialogText.textContent = result.errors.join("\n");
+      errorDialog.classList.remove("hidden");
     } else {
       launchHadErrors = false;
+      statusText.textContent = result.message;
       setTimeout(() => {
         if (!isServerRunningLocal) {
           statusText.textContent = "";
@@ -842,6 +1003,23 @@ async function handleLaunch(isNewGame = false, forceDelete = false) {
     }
   }
 }
+
+errorDialogOk?.addEventListener("click", () => {
+  errorDialog.classList.add("hidden");
+});
+
+errorDialogCopy?.addEventListener("click", async () => {
+  await navigator.clipboard.writeText(errorDialogText.textContent);
+  const check = document.getElementById("copy-check");
+  const text = document.getElementById("copy-btn-text");
+  if (!check || !text) return;
+  text.style.display = "none";
+  check.style.display = "flex";
+  setTimeout(() => {
+    check.style.display = "none";
+    text.style.display = "";
+  }, 1200);
+});
 
 document.querySelector(".action-button").addEventListener("click", () => handleLaunch(true));
 continueBtn?.addEventListener("click", () => handleLaunch(false));
@@ -868,7 +1046,30 @@ function updateButtonsState(isServerRunning) {
     newGameBtn.disabled = false;
     
     const activeMap = document.querySelector(".map-option.active")?.dataset.map || "chernarus";
-    updateStorageStatus(activeMap);
+
+    if (currentMap === "custom") {
+      const enabledMapMod = allMods.find(m => m.mapEnvs?.length > 0 && m.enabled);
+      let canLaunch = false;
+      let envName = "";
+      if (enabledMapMod) {
+        const envRelativePath = enabledMapMod.mapEnvs.length === 1
+          ? enabledMapMod.mapEnvs[0]
+          : selectedMapEnv[enabledMapMod.folderName];
+        canLaunch = !!envRelativePath;
+        envName = envRelativePath?.split(/[\\/]/).pop() || "";
+      }
+      newGameBtn.disabled = !canLaunch;
+      if (continueBtn) {
+        if (canLaunch) {
+          updateStorageStatus(envName);
+        } else {
+          continueBtn.disabled = true;
+        }
+      }
+    } else {
+      updateStorageStatus(activeMap);
+    }
+
     if (statusText.textContent === "DayZ server is running") {
       statusText.textContent = "";
     }
