@@ -388,11 +388,6 @@ header {
 
 
 
-.mods-import-path:hover {
-  background: rgba(237, 234, 225, 0.08);
-  color: rgba(237, 234, 225, 0.9);
-}
-
 .mods-import-btn {
   display: flex;
   align-items: center;
@@ -978,28 +973,6 @@ input[type="checkbox"] {
   min-width: 0;
 }
 
-.launcher-btn {
-  background: rgba(29, 29, 29, 0.7);
-
-  color: rgba(255, 255, 255, 0.85);
-  font-size: 0.65rem;
-  line-height: 1;
-
-  padding: 2px 4px;
-  border-radius: 3px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-
-  cursor: pointer;
-  white-space: nowrap;
-
-  transition: background 0.2s ease, color 0.2s ease;
-}
-
-.launcher-btn:hover {
-  background: rgba(56, 56, 56, 0.7);
-  color: rgba(255, 255, 255, 1);
-}
-
 .server-label {
   line-height: 1;
   white-space: nowrap;
@@ -1117,20 +1090,12 @@ input[type="checkbox"] {
   padding-left: 20px;
 }
 
-.option-item-full {
-  grid-column: 1 / -1;
-}
-
 .option-label {
   font-size: 0.65rem;
   color: rgba(237, 234, 225, 0.6);
   font-family: 'Consolas', 'Courier New', monospace;
   cursor: pointer;
   margin-left: 4px !important;
-}
-
-.opt-cb {
-  justify-self: center;
 }
 
 .option-label {

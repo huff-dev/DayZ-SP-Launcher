@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <header class="titlebar">
+    <header>
       <div id="window-controls">
         <button id="minimize">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
@@ -27,7 +27,7 @@
       <div class="background-layer" id="bg-2"></div>
     </div>
     <main class="app-shell">
-      <section class="top-section">
+      <section>
         <nav class="map-selector">
           <button class="map-option active" data-map="chernarus">Chernarus</button>
           <button class="map-option" data-map="livonia">Livonia</button>
@@ -129,8 +129,8 @@
     <footer class="status-bar" aria-live="polite">
       <div class="status-left">
         <svg id="loading-spinner" class="hidden" viewBox="0 0 24 24" fill="none">
-          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" />
-          <path class="opacity-75" d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" />
+          <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
         </svg>
         <span id="launch-status"></span>
         <a id="update-link" class="update-link hidden">Update available</a>

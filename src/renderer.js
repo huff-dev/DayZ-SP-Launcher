@@ -441,13 +441,9 @@ function updateGameStatus(result) {
   const label = result.found ? "DayZ found" : "DayZ not found";
   setStatusIndicator(gameIndicator, state, label);
 
-  
   const sakhalBtn = document.querySelector('[data-map="sakhal"]');
-  const lockIcon = sakhalBtn?.querySelector(".lock-icon");
-
   if (sakhalBtn) {
     sakhalBtn.classList.remove("locked");
-    if (lockIcon) lockIcon.classList.add("hidden");
   }
 }
 
