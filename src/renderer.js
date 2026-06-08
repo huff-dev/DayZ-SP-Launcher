@@ -1032,6 +1032,9 @@ function addNewGameInputRow() {
   input.addEventListener("input", () => {
     confirmBtn.disabled = !input.value.trim();
   });
+  input.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter" && !confirmBtn.disabled) confirmBtn.click();
+  });
   input.focus();
 }
 
@@ -1070,6 +1073,8 @@ continueBtn?.addEventListener("click", async () => {
 
 function updateButtonsState(isServerRunning) {
   isServerRunningLocal = isServerRunning;
+  const overlay = document.getElementById("server-overlay");
+  if (overlay) overlay.classList.toggle("hidden", !isServerRunning);
   const newGameBtn = document.querySelector(".action-button");
   const statusText = document.getElementById("launch-status");
   const closeBtn = document.getElementById("close");

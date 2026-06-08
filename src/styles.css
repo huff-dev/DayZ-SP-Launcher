@@ -1097,6 +1097,13 @@ input[type="checkbox"] {
   display: none;
 }
 
+#server-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  background: rgba(0, 0, 0, 0.35);
+}
+
 @keyframes slideIn {
   from {
     opacity: 0;
@@ -1170,6 +1177,7 @@ input[type="checkbox"] {
     0 4px 12px rgba(0, 0, 0, 0.35),
     0 0 24px rgba(0, 0, 0, 0.2);
   margin-bottom: 12px;
+  overflow-x: hidden;
   overflow-y: auto;
   height: 120px;
   scrollbar-width: none;
@@ -1201,12 +1209,14 @@ input[type="checkbox"] {
 
 .save-row-div {
   position: relative;
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
   align-items: center;
   padding: 3px 8px;
   cursor: pointer;
   border-radius: 3px;
   transition: background 0.15s ease, color 0.15s ease;
+  box-sizing: border-box;
 }
 
 .save-row-div:hover {
@@ -1222,8 +1232,6 @@ input[type="checkbox"] {
 }
 
 .save-name {
-  flex: 1;
-  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1237,7 +1245,7 @@ input[type="checkbox"] {
   font-size: 0.6rem;
   color: rgba(237, 234, 225, 0.7);
   font-family: 'Consolas', 'Courier New', monospace;
-  margin-right: 8px;
+  margin-right: 12px;
 }
 
 .save-folder-btn {
@@ -1494,13 +1502,17 @@ input[type="checkbox"] {
 
 .save-input-div {
   padding: 3px 8px;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .save-inline-row {
   display: flex;
   align-items: center;
-  /* gap: 2px; */
+  gap: 2px;
   animation: saveSlideDown 0.2s ease;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 @keyframes saveSlideDown {

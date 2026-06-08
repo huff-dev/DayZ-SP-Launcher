@@ -275,23 +275,45 @@ async function scanSaves(map, missionFolder) {
     await fsp.mkdir(savesPath, { recursive: true });
   }
 
-  const mpmPath = dayzServerWatchPath ? path.join(dayzServerWatchPath, "mpmissions", missionFolder) : null;
-  if (!activeSaveSlot && mpmPath && await pathExists(mpmPath)) {
-    try {
-      const mpmEntries = await fsp.readdir(mpmPath, { withFileTypes: true });
-      for (const entry of mpmEntries) {
-        if (!entry.isDirectory()) continue;
-        if (!entry.name.startsWith("storage_")) continue;
-        let folderName = "Old";
-        let suffix = 0;
-        while (await pathExists(path.join(savesPath, folderName))) {
-          suffix++;
-          folderName = `Old${suffix}`;
+  const _settings = await getSettings();
+  if (!_settings._migratedOldSaves && dayzServerWatchPath) {
+    const mpmBasePath = path.join(dayzServerWatchPath, "mpmissions");
+    if (await pathExists(mpmBasePath)) {
+      const mpmFolders = await fsp.readdir(mpmBasePath, { withFileTypes: true });
+      const knownMaps = new Set(Object.values(MISSION_FOLDERS));
+      for (const mpmFolder of mpmFolders) {
+        if (!mpmFolder.isDirectory) continue;
+        const folderName = mpmFolder.name;
+        if (folderName.startsWith("Backup")) continue;
+        if (!knownMaps.has(folderName)) {
+          const hasMapXml = await pathExists(path.join(mpmBasePath, folderName, "cfgenvironment.xml"));
+          if (!hasMapXml) continue;
         }
-        const destPath = path.join(savesPath, folderName);
-        await fsp.rename(path.join(mpmPath, entry.name), destPath);
+        const mpmPath = path.join(mpmBasePath, folderName);
+        const destSavesPath = savesUserPath(folderName);
+        if (!(await pathExists(destSavesPath))) await fsp.mkdir(destSavesPath, { recursive: true });
+        try {
+          const entries = await fsp.readdir(mpmPath, { withFileTypes: true });
+          for (const entry of entries) {
+            if (!entry.isDirectory()) continue;
+            if (!entry.name.startsWith("storage_")) continue;
+            let oldName = "Old";
+            let suffix = 0;
+            while (await pathExists(path.join(destSavesPath, oldName))) {
+              suffix++;
+              oldName = `Old${suffix}`;
+            }
+            await fsp.rename(path.join(mpmPath, entry.name), path.join(destSavesPath, oldName));
+            console.log(`Migrated ${folderName}/${entry.name} -> ${oldName}`);
+          }
+        } catch (e) {
+          console.error(`Failed to migrate ${folderName}:`, e.message);
+        }
       }
-    } catch {}
+    }
+    _settings._migratedOldSaves = true;
+    await saveSettings();
+    console.log("Migration complete");
   }
 
   try {
@@ -1748,7 +1770,7 @@ function createWindow() {
 
   mainWindow.loadFile(path.join(__dirname, "index.html"));
 
-  mainWindow.webContents.openDevTools({ mode: "detach" });
+  // mainWindow.webContents.openDevTools({ mode: "detach" });
 
   mainWindow.on("closed", () => {
     mainWindow = null;
