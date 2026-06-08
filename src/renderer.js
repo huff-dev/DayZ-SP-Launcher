@@ -911,37 +911,10 @@ function showConfirmDialog(container, proceedBtn, cancelBtn) {
   });
 }
 
-async function handleLaunch(isNewGame = false, skipCFCheck = false) {
+async function handleLaunch(isNewGame = false, skipCFCheck = true) {
   const activeMap = document.querySelector(".map-option.active")?.dataset.map || "chernarus";
   const button = document.querySelector(".action-button");
   const statusText = document.getElementById("launch-status");
-
-  
-  let targetMap = activeMap;
-  if (activeMap === "custom") {
-    const enabledMapMod = allMods.find(m => m.mapEnvs?.length > 0 && m.enabled);
-    if (enabledMapMod) {
-      const envRelPath = enabledMapMod.mapEnvs.length === 1
-        ? enabledMapMod.mapEnvs[0]
-        : selectedMapEnv[enabledMapMod.folderName];
-      targetMap = envRelPath?.split(/[\\/]/).pop() || "";
-    } else {
-      targetMap = "";
-    }
-  }
-
-  if (!isNewGame && !skipCFCheck) {
-    const needsWarning = await window.appInfo.checkCFWarning(targetMap || activeMap);
-    if (needsWarning) {
-      button.disabled = true;
-      if (continueBtn) continueBtn.disabled = true;
-      const confirmed = await showConfirmDialog(cfConfirmContainer, cfProceedBtn, cfCancelBtn);
-      if (!confirmed) {
-        updateButtonsState(isServerRunningLocal);
-        return;
-      }
-    }
-  }
 
   const serverResult = await window.appInfo.scanForDayzServer();
   if (!serverResult.found) {
@@ -1067,8 +1040,25 @@ document.querySelector(".action-button").addEventListener("click", () => {
 continueBtn?.addEventListener("click", async () => {
   if (!selectedSaveSlot) return;
   const hasContent = await window.appInfo.checkSaveContent(currentMap, selectedSaveSlot);
+  if (!hasContent) {
+    await window.appInfo.activateSaveSlot(currentMap, selectedSaveSlot);
+    handleLaunch(false, true);
+    return;
+  }
+  const targetMap = document.querySelector(".map-option.active")?.dataset.map || "chernarus";
+  const needsWarning = await window.appInfo.checkCFWarning(targetMap, selectedSaveSlot);
+  if (needsWarning) {
+    const newGameBtn = document.querySelector(".action-button");
+    newGameBtn.disabled = true;
+    if (continueBtn) continueBtn.disabled = true;
+    const confirmed = await showConfirmDialog(cfConfirmContainer, cfProceedBtn, cfCancelBtn);
+    if (!confirmed) {
+      updateButtonsState(isServerRunningLocal);
+      return;
+    }
+  }
   await window.appInfo.activateSaveSlot(currentMap, selectedSaveSlot);
-  handleLaunch(false, !hasContent);
+  handleLaunch(false, true);
 });
 
 function updateButtonsState(isServerRunning) {

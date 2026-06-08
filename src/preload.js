@@ -23,7 +23,7 @@ contextBridge.exposeInMainWorld("appInfo", {
   },
   launchDayZ: (serverPath, map) => ipcRenderer.invoke("dayz:launch", serverPath, map),
   checkMapStorage: (map) => ipcRenderer.invoke("dayz:check-storage", map),
-  checkCFWarning: (map) => ipcRenderer.invoke("dayz:check-cf-warning", map),
+  checkCFWarning: (map, slot) => ipcRenderer.invoke("dayz:check-cf-warning", map, slot),
   deleteMapStorage: (map, slot) => ipcRenderer.invoke("dayz:delete-storage", map, slot),
   getSetting: (key) => ipcRenderer.invoke("dayz:get-setting", key),
   getAllSettings: () => ipcRenderer.invoke("dayz:get-all-settings"),

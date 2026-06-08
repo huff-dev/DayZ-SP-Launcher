@@ -297,14 +297,18 @@ async function scanSaves(map, missionFolder) {
           for (const entry of entries) {
             if (!entry.isDirectory()) continue;
             if (!entry.name.startsWith("storage_")) continue;
-            let oldName = "Old";
-            let suffix = 0;
-            while (await pathExists(path.join(destSavesPath, oldName))) {
-              suffix++;
-              oldName = `Old${suffix}`;
+            const storagePath = path.join(mpmPath, entry.name);
+            const destDir = path.join(destSavesPath, "Old");
+            if (await pathExists(destDir)) {
+              await fsp.rm(destDir, { recursive: true, force: true });
             }
-            await fsp.rename(path.join(mpmPath, entry.name), path.join(destSavesPath, oldName));
-            console.log(`Migrated ${folderName}/${entry.name} -> ${oldName}`);
+            await fsp.mkdir(destDir, { recursive: true });
+            const storageContents = await fsp.readdir(storagePath, { withFileTypes: true });
+            for (const item of storageContents) {
+              await fsp.rename(path.join(storagePath, item.name), path.join(destDir, item.name));
+            }
+            await fsp.rm(storagePath, { recursive: true, force: true });
+            console.log(`Migrated contents of ${folderName}/${entry.name} -> Old`);
           }
         } catch (e) {
           console.error(`Failed to migrate ${folderName}:`, e.message);
@@ -1224,7 +1228,7 @@ ipcMain.handle("dayz:check-cf-folder", async (_event, map) => {
   return await pathExists(fullPath);
 });
 
-ipcMain.handle("dayz:check-cf-warning", async (_event, map) => {
+ipcMain.handle("dayz:check-cf-warning", async (_event, map, slot) => {
   const settings = await getSettings();
   const enabledMods = settings.enabledMods || [];
   const hasCF = enabledMods.some(mod => {
@@ -1233,15 +1237,18 @@ ipcMain.handle("dayz:check-cf-warning", async (_event, map) => {
   });
   if (!hasCF) return false;
 
-  const relativePath = MAP_STORAGE_PATHS[map];
-  if (!relativePath) {
-    const customPath = path.join("mpmissions", map, "storage_1", "communityframework");
-    const fullPath = path.join(dayzServerWatchPath, customPath);
-    return !(await pathExists(fullPath));
-  }
+  const missionFolder = await resolveMissionFolder(map);
+  if (!missionFolder) return false;
 
-  const fullPath = path.join(dayzServerWatchPath, relativePath, "communityframework");
-  return !(await pathExists(fullPath));
+  const saveDir = path.join(savesUserPath(missionFolder), slot || "Old");
+  const paths = [
+    path.join(saveDir, "communityframework"),
+    path.join(saveDir, "storage_1", "communityframework")
+  ];
+  for (const p of paths) {
+    if (await pathExists(p)) return false;
+  }
+  return true;
 });
 
 ipcMain.handle("dayz:check-save-content", async (_event, map, slot) => {
@@ -1290,18 +1297,17 @@ async function restoreActiveSave() {
   const missionFolder = await resolveMissionFolder(activeSaveMap);
   if (!missionFolder) return;
   const storage1Mp = path.join(dayzServerWatchPath, "mpmissions", missionFolder, "storage_1");
-  const userSavePath = path.join(savesUserPath(missionFolder), activeSaveSlot);
   try {
     if (await pathExists(storage1Mp)) {
-      if (await pathExists(userSavePath)) {
-        await fsp.rm(userSavePath, { recursive: true, force: true });
+      const stat = await fsp.lstat(storage1Mp);
+      if (stat.isSymbolicLink()) {
+        await fsp.unlink(storage1Mp);
+      } else {
+        await fsp.rm(storage1Mp, { recursive: true, force: true });
       }
-      await fsp.mkdir(path.dirname(userSavePath), { recursive: true });
-      await fsp.rename(storage1Mp, userSavePath);
-      console.log(`Restored save slot: ${activeSaveSlot}`);
     }
   } catch (error) {
-    console.error("Failed to restore save slot:", error);
+    console.error("Failed to remove server storage symlink:", error);
   }
   activeSaveSlot = null;
   activeSaveMap = null;
@@ -1321,9 +1327,14 @@ ipcMain.handle("dayz:activate-save-slot", async (_event, map, slot) => {
   try {
     if (!(await pathExists(userSavePath))) return false;
     if (await pathExists(storage1Path)) {
-      await fsp.rm(storage1Path, { recursive: true, force: true });
+      const stat = await fsp.lstat(storage1Path);
+      if (stat.isSymbolicLink()) {
+        await fsp.unlink(storage1Path);
+      } else {
+        await fsp.rm(storage1Path, { recursive: true, force: true });
+      }
     }
-    await fsp.cp(userSavePath, storage1Path, { recursive: true });
+    await fsp.symlink(userSavePath, storage1Path, 'junction');
     activeSaveSlot = slot;
     activeSaveMap = map;
     return true;
@@ -1587,20 +1598,22 @@ ipcMain.handle("dayz:launch", async (_event, dayzServerPath, map) => {
       const sourceMtime = sourceStat.mtimeMs;
       const lastSync = lastSyncTimes[fullInfo.folderName] || 0;
       
-      const ensureCopy = async (source, dest) => {
+      const ensureLink = async (source, dest) => {
         const exists = await pathExists(dest);
-        if (!exists || sourceMtime > lastSync) {
-          if (exists) {
-            await fsp.rm(dest, { recursive: true, force: true });
+        if (exists) {
+          const stat = await fsp.lstat(dest);
+          if (stat.isSymbolicLink()) {
+            const target = await fsp.readlink(dest);
+            if (target === source) return false;
           }
-          await fsp.cp(source, dest, { recursive: true });
-          return true;
+          await fsp.rm(dest, { recursive: true, force: true });
         }
-        return false;
+        await fsp.symlink(source, dest, 'junction');
+        return true;
       };
 
-      const serverCopied = await ensureCopy(sourcePath, destPathServer);
-      const gameCopied = await ensureCopy(sourcePath, destPathGame);
+      const serverCopied = await ensureLink(sourcePath, destPathServer);
+      const gameCopied = await ensureLink(sourcePath, destPathGame);
       
       const sourceKeysPath = path.join(sourcePath, "keys");
       const destKeysPath = path.join(dayzServerPath, "keys");
@@ -1740,15 +1753,17 @@ app.on("before-quit", () => {
     resolveMissionFolder(activeSaveMap || "chernarus").then(missionFolder => {
       if (!missionFolder) return;
       const storage1Path = path.join(dayzServerWatchPath, "mpmissions", missionFolder, "storage_1");
-      const userSavePath = path.join(savesUserPath(missionFolder), activeSaveSlot);
       try {
         if (fs.existsSync(storage1Path)) {
-          if (fs.existsSync(userSavePath)) fs.rmSync(userSavePath, { recursive: true, force: true });
-          fs.mkdirSync(path.dirname(userSavePath), { recursive: true });
-          fs.renameSync(storage1Path, userSavePath);
+          const stat = fs.lstatSync(storage1Path);
+          if (stat.isSymbolicLink()) {
+            fs.unlinkSync(storage1Path);
+          } else {
+            fs.rmSync(storage1Path, { recursive: true, force: true });
+          }
         }
       } catch (e) {
-        console.error("Failed to restore save on quit:", e);
+        console.error("Failed to remove server storage on quit:", e);
       }
     });
   }
