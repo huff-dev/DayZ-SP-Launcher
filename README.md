@@ -21,11 +21,12 @@
 
 ## Features
 
-- **One-Click Launch** — Automatically starts a local DayZ server and game client with pre-configured mods.
-- **Mod Management** — Browse Workshop mods, toggle them on/off, and auto-sync.
-- **Preset Support** — Import and export presets created using the official DayZ Launcher.
-- **Multi-Map Support** — Seamlessly switch between Chernarus, Livonia, and Sakhal with automated save management.
-- **Quick Join** — Skips the 15-second login timer.
+- **Save Slot Management**
+- **One-Click Launch**
+- **Mod Management**
+- **Preset Support**
+- **Multi-Map Support**
+- **Quick Join**
 - **Launch without Steam/Internet using Offline Mode**.
 - **Disable Anti-cheat and VAC checks**.
 
