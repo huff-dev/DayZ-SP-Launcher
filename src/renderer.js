@@ -38,6 +38,7 @@ document.getElementById("minimize")?.addEventListener("click", () => {
 });
 
 document.getElementById("close")?.addEventListener("click", () => {
+  if (isServerRunningLocal) return;
   window.appInfo?.close();
 });
 
@@ -1035,6 +1036,8 @@ function updateButtonsState(isServerRunning) {
   isServerRunningLocal = isServerRunning;
   const newGameBtn = document.querySelector(".action-button");
   const statusText = document.getElementById("launch-status");
+  const closeBtn = document.getElementById("close");
+  if (closeBtn) closeBtn.disabled = isServerRunning;
 
   if (isServerRunning) {
     newGameBtn.disabled = true;

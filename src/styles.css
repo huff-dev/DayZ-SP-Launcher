@@ -74,8 +74,13 @@ header {
   color: #fff;
 }
 
-#window-controls button:hover {
+#window-controls button:hover:not(:disabled) {
   transform: scale(1.2);
+}
+
+#window-controls button:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
 }
 
 #window-controls button svg {
