@@ -84,9 +84,22 @@
           </div>
       </section>
       <div class="right-column">
-        <div class="workshop-container">
-          <img src="images/workshop.jpg" alt="Workshop" class="workshop-image" />
-          <button class="workshop-button" id="workshop-btn">Visit Workshop</button>
+        <div class="saves-container">
+          <h2 class="saves-header">Saves</h2>
+          <table class="saves-table">
+            <thead>
+              <!-- <tr>
+                <th>Name</th>
+                <th>Date</th>
+                <th class="col-del"></th>
+              </tr> -->
+            </thead>
+            <tbody id="saves-list">
+              <tr>
+                <td colspan="3" class="saves-empty">No saves yet</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
         <div class="options-container">
           <h2 class="options-header">Options</h2>
@@ -108,13 +121,6 @@
         <div class="button-row">
           <button class="action-button">New Game</button>
           <button class="continue-button">Continue</button>
-        </div>
-        <div id="new-game-confirm" class="confirm-container hidden">
-          <p class="confirm-text">Proceeding will wipe previous saves. Are you sure?</p>
-          <div class="confirm-actions">
-            <button id="confirm-proceed" class="mini-button proceed">Proceed</button>
-            <button id="confirm-cancel" class="mini-button cancel">Cancel</button>
-          </div>
         </div>
         <div id="cf-confirm" class="confirm-container hidden">
           <p class="confirm-text">Loading CF mod on an existing save causes a memory leak, consider starting a new game with the mod enabled.</p>

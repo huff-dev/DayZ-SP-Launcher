@@ -24,7 +24,7 @@ contextBridge.exposeInMainWorld("appInfo", {
   launchDayZ: (serverPath, map) => ipcRenderer.invoke("dayz:launch", serverPath, map),
   checkMapStorage: (map) => ipcRenderer.invoke("dayz:check-storage", map),
   checkCFWarning: (map) => ipcRenderer.invoke("dayz:check-cf-warning", map),
-  deleteMapStorage: (map) => ipcRenderer.invoke("dayz:delete-storage", map),
+  deleteMapStorage: (map, slot) => ipcRenderer.invoke("dayz:delete-storage", map, slot),
   getSetting: (key) => ipcRenderer.invoke("dayz:get-setting", key),
   getAllSettings: () => ipcRenderer.invoke("dayz:get-all-settings"),
   saveSetting: (key, value) => ipcRenderer.invoke("dayz:save-setting", key, value),
@@ -61,5 +61,15 @@ contextBridge.exposeInMainWorld("appInfo", {
     const listener = (_event, presets) => callback(presets);
     ipcRenderer.on("dayz:presets-updated", listener);
     return () => ipcRenderer.removeListener("dayz:presets-updated", listener);
+  },
+  scanSaves: (map, missionFolder) => ipcRenderer.invoke("dayz:scan-saves", map, missionFolder),
+  deleteSaveSlot: (map, slot) => ipcRenderer.invoke("dayz:delete-save-slot", map, slot),
+  activateSaveSlot: (map, slot) => ipcRenderer.invoke("dayz:activate-save-slot", map, slot),
+  createSaveSlot: (map, slot) => ipcRenderer.invoke("dayz:create-save-slot", map, slot),
+  checkSaveContent: (map, slot) => ipcRenderer.invoke("dayz:check-save-content", map, slot),
+  onSavesUpdated: (callback) => {
+    const listener = (_event, saves) => callback(saves);
+    ipcRenderer.on("dayz:saves-updated", listener);
+    return () => ipcRenderer.removeListener("dayz:saves-updated", listener);
   }
 });

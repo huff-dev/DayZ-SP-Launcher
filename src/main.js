@@ -55,6 +55,9 @@ let dayzGameWatcher = null;
 let dayzGameWatchPath = null;
 let dayzGameWatchTimer = null;
 
+let dayzSavesWatcher = null;
+let dayzSavesWatchTimer = null;
+
 let mainWindow = null;
 
 const gotTheLock = app.requestSingleInstanceLock();
@@ -230,6 +233,107 @@ function setupServerWatcher(appInfo) {
       broadcastUpdate("dayz:server-updated", await buildUpdateResult(appInfo));
     }, 150);
   });
+
+  setupSavesWatcher();
+  getSettings().then(settings => {
+    const currentMap = settings.selectedMap || "chernarus";
+    scanSaves(currentMap).then(saves => broadcastUpdate("dayz:saves-updated", saves));
+  });
+}
+
+const MISSION_FOLDERS = {
+  chernarus: "dayzOffline.chernarusplus",
+  livonia: "dayzOffline.enoch",
+  sakhal: "dayzOffline.sakhal",
+};
+
+async function resolveMissionFolder(map) {
+  if (MISSION_FOLDERS[map]) return MISSION_FOLDERS[map];
+
+  const settings = await getSettings();
+  const envPath = settings.selectedMapEnv;
+  if (envPath) return path.basename(envPath);
+
+  return null;
+}
+
+async function scanSaves(map, missionFolder) {
+  if (!dayzServerWatchPath) return [];
+
+  const mpmissionsPath = path.join(dayzServerWatchPath, "mpmissions");
+  if (!(await pathExists(mpmissionsPath))) return [];
+
+  if (!missionFolder) {
+    missionFolder = await resolveMissionFolder(map);
+  }
+  if (!missionFolder) return [];
+
+  const missionPath = path.join(mpmissionsPath, missionFolder);
+  if (!(await pathExists(missionPath))) return [];
+
+  try {
+    const entries = await fsp.readdir(missionPath, { withFileTypes: true });
+    const saves = [];
+
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const match = entry.name.match(/^storage_(.+)$/);
+      if (!match) continue;
+      try {
+        if (match[1] === "1") {
+          if (activeSaveSlot) {
+            const stat = await fsp.stat(path.join(missionPath, entry.name));
+            saves.push({
+              name: activeSaveSlot,
+              date: stat.mtimeMs
+            });
+          } else {
+            const oldPath = path.join(missionPath, entry.name);
+            const newPath = path.join(missionPath, "storage_default");
+            if (!(await pathExists(newPath))) {
+              await fsp.rename(oldPath, newPath);
+            }
+            const stat = await fsp.stat(newPath);
+            saves.push({
+              name: "default",
+              date: stat.mtimeMs
+            });
+          }
+          continue;
+        }
+        const stat = await fsp.stat(path.join(missionPath, entry.name));
+        saves.push({
+          name: match[1],
+          date: stat.mtimeMs
+        });
+      } catch {}
+    }
+
+    saves.sort((a, b) => b.date - a.date);
+    return saves;
+  } catch {
+    return [];
+  }
+}
+
+function setupSavesWatcher() {
+  if (dayzSavesWatcher) dayzSavesWatcher.close();
+  dayzSavesWatcher = null;
+
+  if (!dayzServerWatchPath) return;
+
+  const mpmissionsPath = path.join(dayzServerWatchPath, "mpmissions");
+  if (!fs.existsSync(mpmissionsPath)) return;
+
+  dayzSavesWatcher = fs.watch(mpmissionsPath, { recursive: true }, () => {
+    clearTimeout(dayzSavesWatchTimer);
+    dayzSavesWatchTimer = setTimeout(async () => {
+      const settings = await getSettings();
+      const currentMap = settings.selectedMap || "chernarus";
+      const saves = await scanSaves(currentMap);
+      broadcastUpdate("dayz:saves-updated", saves);
+    }, 300);
+  });
 }
 
 const SETTINGS_FILE = path.join(app.getPath("userData"), "settings.json");
@@ -337,6 +441,8 @@ let lastServerExePath = null;
 let wasGoldbergApplied = false;
 let goldbergGamePath = null;
 let goldbergServerPath = null;
+let activeSaveSlot = null;
+let activeSaveMap = null;
 const SERVER_NAME_ARG = "-serverName=DayZ_SPL";
 
 function killServer() {
@@ -362,6 +468,12 @@ function checkProcesses() {
       if (isServerRunning && !running && wasGoldbergApplied && goldbergServerPath && goldberg.hasGoldbergBackup(goldbergServerPath)) {
         console.log("Server stopped, restoring original server steam_api64.dll...");
         goldberg.removeGoldberg(null, goldbergServerPath);
+      }
+      if (isServerRunning && !running && activeSaveSlot) {
+        restoreActiveSave().then(async () => {
+          const saves = await scanSaves(activeSaveMap || "chernarus");
+          broadcastUpdate("dayz:saves-updated", saves);
+        });
       }
       isServerRunning = running;
       broadcastUpdate("dayz:process-status", { running: isServerRunning });
@@ -396,6 +508,10 @@ function checkProcesses() {
 setInterval(checkProcesses, 2000);
 
 ipcMain.handle("dayz:is-server-running", () => isServerRunning);
+
+ipcMain.handle("dayz:scan-saves", async (_event, map, missionFolder) => {
+  return await scanSaves(map, missionFolder);
+});
 
 console.log(`Settings file path: ${SETTINGS_FILE}`);
 
@@ -910,14 +1026,7 @@ ipcMain.handle("dayz:check-preset-dirty", async (_event, filename) => {
     const mapMatch = content.match(/<selected-map>([^<]+)<\/selected-map>/);
     if (mapMatch) {
       const presetSelectedMap = mapMatch[1];
-      const envFolderMatch = content.match(/<selected-env-folder>([^<]+)<\/selected-env-folder>/);
-      const envNameMatch = content.match(/<selected-env-name>([^<]+)<\/selected-env-name>/);
-      const presetEnvFolder = envFolderMatch ? envFolderMatch[1] : "";
-      const presetEnvName = envNameMatch ? envNameMatch[1] : "";
-
       if (presetSelectedMap !== (settings.selectedMap || "chernarus")) return { dirty: true };
-      if (presetEnvFolder !== (settings.selectedMapEnvFolder || "")) return { dirty: true };
-      if (presetEnvName !== (settings.selectedMapEnv || "")) return { dirty: true };
     }
 
     return { dirty: false };
@@ -1082,38 +1191,138 @@ ipcMain.handle("dayz:check-cf-warning", async (_event, map) => {
   return !(await pathExists(fullPath));
 });
 
-ipcMain.handle("dayz:delete-storage", async (_event, map) => {
+ipcMain.handle("dayz:check-save-content", async (_event, map, slot) => {
   if (!dayzServerWatchPath) {
     const serverResult = await scanForDayzServer();
     if (!serverResult.found) return false;
   }
 
-  const relativePath = MAP_STORAGE_PATHS[map];
-  if (!relativePath) {
-    const customPath = path.join("mpmissions", map, "storage_1");
-    const fullPath = path.join(dayzServerWatchPath, customPath);
-    try {
-      if (await pathExists(fullPath)) {
-        await fsp.rm(fullPath, { recursive: true, force: true });
-        console.log(`Deleted storage for ${map} at ${fullPath}`);
-      }
-      return true;
-    } catch (error) {
-      console.error(`Failed to delete storage for ${map}:`, error);
-      return false;
-    }
+  const missionFolder = await resolveMissionFolder(map);
+  if (!missionFolder) return false;
+
+  const storagePath = path.join(dayzServerWatchPath, "mpmissions", missionFolder, saveSlotFolder(slot));
+  try {
+    if (!(await pathExists(storagePath))) return false;
+    const entries = await fsp.readdir(storagePath);
+    return entries.length > 0;
+  } catch {
+    return false;
+  }
+});
+
+ipcMain.handle("dayz:delete-storage", async (_event, map, slot) => {
+  if (!dayzServerWatchPath) {
+    const serverResult = await scanForDayzServer();
+    if (!serverResult.found) return false;
   }
 
-  const fullPath = path.join(dayzServerWatchPath, relativePath);
+  const missionFolder = await resolveMissionFolder(map);
+  if (!missionFolder) return false;
+
+  const storagePath = path.join(dayzServerWatchPath, "mpmissions", missionFolder, `storage_${slot || "1"}`);
   try {
-    if (await pathExists(fullPath)) {
-      await fsp.rm(fullPath, { recursive: true, force: true });
-      console.log(`Deleted storage for ${map} at ${fullPath}`);
+    if (await pathExists(storagePath)) {
+      await fsp.rm(storagePath, { recursive: true, force: true });
+      console.log(`Deleted ${storagePath}`);
     }
     return true;
   } catch (error) {
-    console.error(`Failed to delete storage for ${map}:`, error);
+    console.error(`Failed to delete storage for ${map}/${slot}:`, error);
     return false;
+  }
+});
+
+function saveSlotFolder(slot) {
+  return `storage_${slot === "1" || slot === "default" ? "default" : slot}`;
+}
+
+async function restoreActiveSave() {
+  if (!activeSaveSlot || !activeSaveMap || !dayzServerWatchPath) return;
+  const missionFolder = await resolveMissionFolder(activeSaveMap);
+  if (!missionFolder) return;
+  const storage1Path = path.join(dayzServerWatchPath, "mpmissions", missionFolder, "storage_1");
+  const origPath = path.join(dayzServerWatchPath, "mpmissions", missionFolder, saveSlotFolder(activeSaveSlot));
+  try {
+    if (await pathExists(storage1Path)) {
+      if (await pathExists(origPath)) {
+        await fsp.rm(origPath, { recursive: true, force: true });
+      }
+      await fsp.rename(storage1Path, origPath);
+      console.log(`Restored save slot: ${activeSaveSlot}`);
+    }
+  } catch (error) {
+    console.error("Failed to restore save slot:", error);
+  }
+  activeSaveSlot = null;
+  activeSaveMap = null;
+}
+
+ipcMain.handle("dayz:activate-save-slot", async (_event, map, slot) => {
+  if (!dayzServerWatchPath) {
+    const serverResult = await scanForDayzServer();
+    if (!serverResult.found) return false;
+  }
+
+  const missionFolder = await resolveMissionFolder(map);
+  if (!missionFolder) return false;
+
+  const origPath = path.join(dayzServerWatchPath, "mpmissions", missionFolder, saveSlotFolder(slot));
+  const storage1Path = path.join(dayzServerWatchPath, "mpmissions", missionFolder, "storage_1");
+  try {
+    if (!(await pathExists(origPath))) return false;
+    if (await pathExists(storage1Path)) {
+      await fsp.rm(storage1Path, { recursive: true, force: true });
+    }
+    await fsp.rename(origPath, storage1Path);
+    activeSaveSlot = slot;
+    activeSaveMap = map;
+    return true;
+  } catch (error) {
+    console.error("Failed to activate save slot:", error);
+    return false;
+  }
+});
+
+ipcMain.handle("dayz:delete-save-slot", async (_event, map, slot) => {
+  if (!dayzServerWatchPath) {
+    const serverResult = await scanForDayzServer();
+    if (!serverResult.found) return false;
+  }
+
+  const missionFolder = await resolveMissionFolder(map);
+  if (!missionFolder) return false;
+
+  const storagePath = path.join(dayzServerWatchPath, "mpmissions", missionFolder, saveSlotFolder(slot));
+  try {
+    if (await pathExists(storagePath)) {
+      await fsp.rm(storagePath, { recursive: true, force: true });
+      broadcastUpdate("dayz:saves-updated", await scanSaves(map));
+    }
+    return true;
+  } catch (error) {
+    console.error(`Failed to delete storage_${slot} for ${map}:`, error);
+    return false;
+  }
+});
+
+ipcMain.handle("dayz:create-save-slot", async (_event, map, slot) => {
+  if (!dayzServerWatchPath) {
+    const serverResult = await scanForDayzServer();
+    if (!serverResult.found) return false;
+  }
+
+  const missionFolder = await resolveMissionFolder(map);
+  if (!missionFolder) return false;
+
+  const storagePath = path.join(dayzServerWatchPath, "mpmissions", missionFolder, saveSlotFolder(slot));
+  try {
+    if (await pathExists(storagePath)) return "exists";
+    await fsp.mkdir(storagePath, { recursive: true });
+    broadcastUpdate("dayz:saves-updated", await scanSaves(map));
+    return "ok";
+  } catch (error) {
+    console.error(`Failed to create storage_${slot} for ${map}:`, error);
+    return "error";
   }
 });
 
@@ -1477,6 +1686,21 @@ app.on("before-quit", () => {
     goldbergGamePath = null;
     goldbergServerPath = null;
   }
+  if (activeSaveSlot && dayzServerWatchPath) {
+    resolveMissionFolder(activeSaveMap || "chernarus").then(missionFolder => {
+      if (!missionFolder) return;
+      const storage1Path = path.join(dayzServerWatchPath, "mpmissions", missionFolder, "storage_1");
+      const origPath = path.join(dayzServerWatchPath, "mpmissions", missionFolder, saveSlotFolder(activeSaveSlot));
+      try {
+        if (fs.existsSync(storage1Path)) {
+          if (fs.existsSync(origPath)) fs.rmSync(origPath, { recursive: true, force: true });
+          fs.renameSync(storage1Path, origPath);
+        }
+      } catch (e) {
+        console.error("Failed to restore save on quit:", e);
+      }
+    });
+  }
 });
 
 function createWindow() {
@@ -1495,7 +1719,7 @@ function createWindow() {
 
   mainWindow.loadFile(path.join(__dirname, "index.html"));
 
-  // mainWindow.webContents.openDevTools({ mode: "detach" });
+  mainWindow.webContents.openDevTools({ mode: "detach" });
 
   mainWindow.on("closed", () => {
     mainWindow = null;

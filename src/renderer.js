@@ -291,24 +291,25 @@ function renderModsList(mods) {
     checkbox.type = "checkbox";
     checkbox.checked = mod.enabled;
     if (isDisabledMapMod) checkbox.disabled = true;
-    checkbox.addEventListener("change", () => {
+    checkbox.addEventListener("change", async () => {
       if (mod.mapEnvs?.length > 0 && checkbox.checked) {
-        allMods.forEach(other => {
+        for (const other of allMods) {
           if (other !== mod && other.mapEnvs?.length > 0 && other.enabled) {
-            window.appInfo.toggleMod(other, false);
+            await window.appInfo.toggleMod(other, false);
           }
-        });
+        }
       }
       if (!checkbox.checked) {
-        delete selectedMapEnv[mod.folderName];
-        window.appInfo.saveSetting("selectedMapEnv", "");
-        window.appInfo.saveSetting("selectedMapEnvFolder", "");
+        await window.appInfo.saveSetting("selectedMapEnv", "");
+        await window.appInfo.saveSetting("selectedMapEnvFolder", "");
+      } else {
+        const env = mod.mapEnvs?.[0] || selectedMapEnv[mod.folderName] || "";
+        selectedMapEnv[mod.folderName] = env;
+        await window.appInfo.saveSetting("selectedMapEnv", env);
+        await window.appInfo.saveSetting("selectedMapEnvFolder", mod.folderName);
       }
-      window.appInfo.toggleMod(mod, checkbox.checked);
-      if (selectedPreset) {
-        presetDirty = true;
-        updateLabel();
-      }
+      await window.appInfo.toggleMod(mod, checkbox.checked);
+      refreshSaves();
     });
     enabledCell.appendChild(checkbox);
 
@@ -381,11 +382,11 @@ function renderModsList(mods) {
         envCheckbox.type = "checkbox";
         envCheckbox.checked = isActive;
         envCheckbox.disabled = !!activeEnv && !isActive;
-        envCheckbox.addEventListener("change", () => {
+        envCheckbox.addEventListener("change", async () => {
           if (envCheckbox.checked) {
             selectedMapEnv[mod.folderName] = envName;
-            window.appInfo.saveSetting("selectedMapEnv", envName);
-            window.appInfo.saveSetting("selectedMapEnvFolder", mod.folderName);
+            await window.appInfo.saveSetting("selectedMapEnv", envName);
+            await window.appInfo.saveSetting("selectedMapEnvFolder", mod.folderName);
             envRows.forEach(r => {
               const cb = r.querySelector("input[type=checkbox]");
               if (cb !== envCheckbox) {
@@ -396,14 +397,15 @@ function renderModsList(mods) {
             });
           } else {
             delete selectedMapEnv[mod.folderName];
-            window.appInfo.saveSetting("selectedMapEnv", "");
-            window.appInfo.saveSetting("selectedMapEnvFolder", "");
+            await window.appInfo.saveSetting("selectedMapEnv", "");
+            await window.appInfo.saveSetting("selectedMapEnvFolder", "");
             envRows.forEach(r => {
               const cb = r.querySelector("input[type=checkbox]");
               cb.disabled = false;
               r.classList.remove("mod-env-disabled");
             });
           }
+          if (currentMap === "custom") refreshSaves();
           updateButtonsState(isServerRunningLocal);
         });
         envWrap.appendChild(envCheckbox);
@@ -432,19 +434,26 @@ function renderMods(mods) {
   filterMods();
 }
 
+function getMissionFolder(map) {
+  if (map === "chernarus") return "dayzOffline.chernarusplus";
+  if (map === "livonia") return "dayzOffline.enoch";
+  if (map === "sakhal") return "dayzOffline.sakhal";
+  const envEntry = Object.values(selectedMapEnv)[0];
+  if (envEntry) return envEntry.split(/[\\/]/).pop();
+  return null;
+}
+
+function refreshSaves() {
+  const mf = getMissionFolder(currentMap);
+  window.appInfo.scanSaves(currentMap, mf).then(renderSaves);
+}
+
 const mapBackgrounds = {
   chernarus: 'images/chernarus.png',
   livonia: 'images/livonia.png',
   sakhal: 'images/sakhal.png',
   custom: 'images/custom.png',
 };
-
-async function updateStorageStatus(map) {
-  if (!continueBtn) return;
-  
-  const hasStorage = await window.appInfo?.checkMapStorage?.(map);
-  continueBtn.disabled = !hasStorage;
-}
 
 function setBackground(map) {
   currentMap = map;
@@ -468,6 +477,7 @@ function setBackground(map) {
   
   window.appInfo?.saveSetting?.("selectedMap", map);
   
+  refreshSaves();
   updateButtonsState(isServerRunningLocal);
   filterMods();
 }
@@ -526,7 +536,7 @@ offlineModeCheckbox?.addEventListener("change", () => {
   activeLayerIndex = savedIndex;
   
   
-  updateStorageStatus(savedMap);
+  checkSelectedSaveContent();
   filterMods();
 })();
 
@@ -540,6 +550,9 @@ function updateServerStatus(result) {
   const state = result.found ? "online" : "offline";
   const label = result.found ? "DayZ Server found" : "DayZ Server not found";
   setStatusIndicator(serverIndicator, state, label);
+  if (result.found) {
+    refreshSaves();
+  }
 }
 
 function updateGameStatus(result) {
@@ -596,10 +609,8 @@ function selectPreset(name, filename, isDefault) {
 function checkDirty() {
   if (!currentPresetFilename) return;
   window.appInfo.checkPresetDirty(currentPresetFilename).then(result => {
-    if (result.dirty !== presetDirty) {
-      presetDirty = result.dirty;
-      updateLabel();
-    }
+    presetDirty = result.dirty;
+    updateLabel();
   });
 }
 
@@ -624,6 +635,7 @@ async function handleApplyPreset(filename) {
     } else {
       currentMap = result.selectedMap;
       filterMods();
+      refreshSaves();
       updateButtonsState(isServerRunningLocal);
     }
   }
@@ -873,14 +885,6 @@ window.appInfo.onDayzServerUpdated(updateServerStatus);
 window.appInfo.onDayzGameUpdated(updateGameStatus);
 window.appInfo.onDayzModsUpdated(renderMods);
 
-document.getElementById("workshop-btn").addEventListener("click", () => {
-  window.location.href = 'steam://openurl/https://steamcommunity.com/app/221100/workshop/';
-});
-
-const confirmContainer = document.getElementById("new-game-confirm");
-const confirmProceedBtn = document.getElementById("confirm-proceed");
-const confirmCancelBtn = document.getElementById("confirm-cancel");
-
 const cfConfirmContainer = document.getElementById("cf-confirm");
 const cfProceedBtn = document.getElementById("cf-proceed");
 const cfCancelBtn = document.getElementById("cf-cancel");
@@ -904,26 +908,10 @@ function showConfirmDialog(container, proceedBtn, cancelBtn) {
   });
 }
 
-async function handleLaunch(isNewGame = false, forceDelete = false) {
+async function handleLaunch(isNewGame = false, skipCFCheck = false) {
   const activeMap = document.querySelector(".map-option.active")?.dataset.map || "chernarus";
   const button = document.querySelector(".action-button");
   const statusText = document.getElementById("launch-status");
-
-  if (isNewGame && confirmContainer?.classList.contains("hidden")) {
-    
-    if (continueBtn && !continueBtn.disabled) {
-      confirmContainer.classList.remove("hidden");
-      
-      button.disabled = true;
-      continueBtn.disabled = true;
-      return;
-    } else {
-      
-      forceDelete = true;
-    }
-  }
-
-  confirmContainer?.classList.add("hidden");
 
   
   let targetMap = activeMap;
@@ -939,13 +927,7 @@ async function handleLaunch(isNewGame = false, forceDelete = false) {
     }
   }
 
-  if (isNewGame || forceDelete) {
-    statusText.textContent = "Wiping previous save...";
-    if (targetMap) await window.appInfo.deleteMapStorage(targetMap);
-  }
-
-  
-  if (!isNewGame && !forceDelete) {
+  if (!isNewGame && !skipCFCheck) {
     const needsWarning = await window.appInfo.checkCFWarning(targetMap || activeMap);
     if (needsWarning) {
       button.disabled = true;
@@ -981,7 +963,7 @@ async function handleLaunch(isNewGame = false, forceDelete = false) {
    
   button.disabled = isServerRunningLocal;
   
-  updateStorageStatus(activeMap);
+  checkSelectedSaveContent();
   
   button.textContent = "New Game";
   spinner.classList.add("hidden");
@@ -1003,6 +985,59 @@ async function handleLaunch(isNewGame = false, forceDelete = false) {
       }, 3000);
     }
   }
+  updateButtonsState(isServerRunningLocal);
+}
+
+let newGameRowActive = false;
+let selectedSaveSlot = null;
+
+async function checkSelectedSaveContent() {
+  if (!continueBtn) return;
+  if (!selectedSaveSlot) {
+    continueBtn.disabled = true;
+    continueBtn.textContent = "Continue";
+    return;
+  }
+  const slot = selectedSaveSlot;
+  const hasContent = await window.appInfo.checkSaveContent(currentMap, slot);
+  if (selectedSaveSlot !== slot) return;
+  continueBtn.disabled = false;
+  continueBtn.textContent = hasContent ? "Continue" : "Launch";
+}
+
+function addNewGameInputRow() {
+  if (newGameRowActive) return;
+  newGameRowActive = true;
+
+  const tbody = document.getElementById("saves-list");
+  if (!tbody) return;
+
+  const row = document.createElement("tr");
+  row.className = "save-input-row";
+  row.id = "new-game-input-row";
+  row.innerHTML = `
+    <td colspan="3">
+      <div class="save-inline-row">
+        <input type="text" class="save-inline-input" placeholder="New save name.." />
+        <button class="save-inline-btn save-inline-close">${'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 6l12 12M6 18L18 6" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>'}</button>
+        <button class="save-inline-btn save-inline-confirm">&#10003;</button>
+      </div>
+    </td>`;
+  tbody.insertBefore(row, tbody.firstChild);
+
+  const input = row.querySelector(".save-inline-input");
+  const confirmBtn = row.querySelector(".save-inline-confirm");
+  confirmBtn.disabled = true;
+  input.addEventListener("input", () => {
+    confirmBtn.disabled = !input.value.trim();
+  });
+  input.focus();
+}
+
+function removeNewGameInputRow() {
+  const row = document.getElementById("new-game-input-row");
+  if (row) row.remove();
+  newGameRowActive = false;
 }
 
 errorDialogOk?.addEventListener("click", () => {
@@ -1022,14 +1057,14 @@ errorDialogCopy?.addEventListener("click", async () => {
   }, 1200);
 });
 
-document.querySelector(".action-button").addEventListener("click", () => handleLaunch(true));
-continueBtn?.addEventListener("click", () => handleLaunch(false));
-
-confirmProceedBtn?.addEventListener("click", () => handleLaunch(false, true));
-confirmCancelBtn?.addEventListener("click", () => {
-  confirmContainer?.classList.add("hidden");
-  
-  updateButtonsState(isServerRunningLocal);
+document.querySelector(".action-button").addEventListener("click", () => {
+  addNewGameInputRow();
+});
+continueBtn?.addEventListener("click", async () => {
+  if (!selectedSaveSlot) return;
+  const hasContent = await window.appInfo.checkSaveContent(currentMap, selectedSaveSlot);
+  await window.appInfo.activateSaveSlot(currentMap, selectedSaveSlot);
+  handleLaunch(false, !hasContent);
 });
 
 function updateButtonsState(isServerRunning) {
@@ -1064,13 +1099,13 @@ function updateButtonsState(isServerRunning) {
       newGameBtn.disabled = !canLaunch;
       if (continueBtn) {
         if (canLaunch) {
-          updateStorageStatus(envName);
+          checkSelectedSaveContent();
         } else {
           continueBtn.disabled = true;
         }
       }
     } else {
-      updateStorageStatus(activeMap);
+      checkSelectedSaveContent();
     }
 
     if (statusText.textContent === "DayZ server is running") {
@@ -1088,3 +1123,93 @@ window.appInfo.onProcessStatusUpdated((status) => {
   const running = await window.appInfo.isServerRunning();
   updateButtonsState(running);
 })();
+
+function renderSaves(saves) {
+  const tbody = document.getElementById("saves-list");
+  if (!tbody) return;
+
+  const existingInput = document.getElementById("new-game-input-row");
+  tbody.innerHTML = "";
+
+  if (!saves || saves.length === 0) {
+    const row = document.createElement("tr");
+    row.innerHTML = '<td colspan="3" class="saves-empty">No saves yet</td>';
+    tbody.appendChild(row);
+    selectedSaveSlot = null;
+    if (continueBtn) { continueBtn.disabled = true; continueBtn.textContent = "Continue"; }
+    if (existingInput) tbody.insertBefore(existingInput, tbody.firstChild);
+    return;
+  }
+
+  for (const [i, save] of saves.entries()) {
+    const row = document.createElement("tr");
+    row.className = "save-row" + (i === 0 ? " selected" : "");
+    row.dataset.slot = save.name;
+    const date = new Date(save.date);
+    const pad = (n) => String(n).padStart(2, "0");
+    const dateStr = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+    const defaultTag = save.name === "default" ? ' <span class="save-default">(default)</span>' : "";
+    row.innerHTML = `<td>${save.name}${defaultTag}</td><td>${dateStr}</td><td class="col-del"><button class="save-del-btn" title="Delete save">${'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>'}</button></td>`;
+    tbody.appendChild(row);
+  }
+
+  if (existingInput) tbody.insertBefore(existingInput, tbody.firstChild);
+
+  const firstSelected = tbody.querySelector(".save-row.selected");
+  if (firstSelected) {
+    selectedSaveSlot = firstSelected.dataset.slot;
+    checkSelectedSaveContent();
+  } else {
+    selectedSaveSlot = null;
+    if (continueBtn) { continueBtn.disabled = true; continueBtn.textContent = "Continue"; }
+  }
+}
+
+document.getElementById("saves-list")?.addEventListener("click", async (e) => {
+  const saveRow = e.target.closest(".save-row");
+  if (saveRow && !e.target.closest("button")) {
+    document.querySelectorAll(".save-row.selected").forEach(r => r.classList.remove("selected"));
+    saveRow.classList.add("selected");
+    selectedSaveSlot = saveRow.dataset.slot;
+    checkSelectedSaveContent();
+    return;
+  }
+
+  const delBtn = e.target.closest(".save-del-btn");
+  if (delBtn) {
+    const row = delBtn.closest(".save-row");
+    if (row) window.appInfo.deleteSaveSlot(currentMap, row.dataset.slot);
+    return;
+  }
+
+  const confirmBtn = e.target.closest(".save-inline-confirm");
+  if (confirmBtn) {
+    if (confirmBtn.disabled) return;
+    const row = document.getElementById("new-game-input-row");
+    if (!row) return;
+    const input = row.querySelector(".save-inline-input");
+    const slotName = input.value.trim();
+    if (!slotName || slotName === "1" || slotName === "default") {
+      input.classList.add("save-inline-input-error");
+      setTimeout(() => input.classList.remove("save-inline-input-error"), 1500);
+      return;
+    }
+    const result = await window.appInfo.createSaveSlot(currentMap, slotName);
+    if (result === "exists") {
+      input.classList.add("save-inline-input-error");
+      setTimeout(() => input.classList.remove("save-inline-input-error"), 1500);
+      return;
+    }
+    removeNewGameInputRow();
+    refreshSaves();
+    return;
+  }
+
+  const closeBtn = e.target.closest(".save-inline-close");
+  if (closeBtn) {
+    removeNewGameInputRow();
+  }
+});
+
+refreshSaves();
+window.appInfo.onSavesUpdated(renderSaves);

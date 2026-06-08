@@ -1160,33 +1160,142 @@ input[type="checkbox"] {
   height: 100%;
 }
 
-.workshop-container {
-  position: relative;
-  margin-bottom: 10px;
+.saves-container {
+  background: #141414;
+  border-radius: 8px;
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.35),
+    0 0 24px rgba(0, 0, 0, 0.2);
+  margin-bottom: 12px;
+  overflow-y: auto;
+  height: 120px;
+  scrollbar-width: none;
 }
 
-.workshop-image {
-  width: 100%;
-  border-radius: 4px;
+.saves-container::-webkit-scrollbar {
+  display: none;
 }
 
-.workshop-button {
-  position: absolute;
-  bottom: 8px;
-  right: 8px;
-  padding: 4px 10px;
+.saves-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0;
+  padding: 4px;
   font-size: 0.65rem;
-  background: rgba(0,0,0,0.7);
-  color: rgba(255,255,255,0.85);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 3px;
-  cursor: pointer;
-  transition: background 0.2s ease, color 0.2s ease;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: rgba(237, 234, 225, 0.6);
+  text-align: center;
+  background: #141414;
+  border-bottom: 1px solid rgba(237, 234, 225, 0.05);
 }
 
-.workshop-button:hover {
-  background: rgba(0,0,0,0.9);
-  color: rgba(255,255,255,1);
+.saves-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.6rem;
+}
+
+.saves-table th {
+  padding: 3px 8px;
+  text-align: left;
+  color: rgba(237, 234, 225, 0.4);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid rgba(237, 234, 225, 0.05);
+}
+
+.saves-table th:first-child {
+  width: 57%;
+}
+
+.saves-table th:nth-child(2) {
+  width: 43%;
+  text-align: right;
+}
+
+.saves-table td {
+  padding: 3px 8px;
+  color: rgba(237, 234, 225, 0.7);
+  font-family: 'Consolas', 'Courier New', monospace;
+}
+
+.saves-table td:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.saves-table td:nth-child(2) {
+  text-align: right;
+}
+
+.saves-table td:nth-child(2) {
+  text-align: right;
+}
+
+.saves-table tbody tr:hover td {
+  color: rgba(237, 234, 225, 0.9);
+}
+
+.col-del {
+  width: 26px;
+  padding: 0 !important;
+  text-align: center;
+}
+
+.save-row {
+  position: relative;
+  cursor: pointer;
+}
+
+.save-row.selected td {
+  color: rgba(180, 200, 120, 0.9);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.save-row.selected .save-default {
+  color: rgba(180, 200, 120, 0.5);
+}
+
+.save-del-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  margin: 0 auto;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: rgba(237, 234, 225, 0.35);
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.save-del-btn:hover {
+  color: rgba(200, 60, 60, 0.7);
+}
+
+.save-del-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.save-default {
+  opacity: 0.4;
+}
+
+.saves-empty {
+  text-align: center;
+  color: rgba(237, 234, 225, 0.3) !important;
+  padding: 16px 8px !important;
+  font-family: inherit !important;
+  font-style: italic;
 }
 
 .options-container {
@@ -1296,6 +1405,114 @@ input[type="checkbox"] {
   color: rgba(237, 234, 225, 0.8);
   text-align: center;
   line-height: 1.3;
+}
+
+.save-input-row td {
+  padding: 3px 6px;
+  overflow: hidden;
+}
+
+.save-inline-row {
+  display: flex;
+  align-items: center;
+  /* gap: 2px; */
+  animation: saveSlideDown 0.2s ease;
+}
+
+@keyframes saveSlideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.save-inline-input {
+  flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  color: rgba(237, 234, 225, 0.8);
+  font-size: 0.55rem;
+  font-family: inherit;
+  outline: none;
+  height: 22px;
+}
+
+
+
+.save-inline-input::placeholder {
+  color: rgba(237, 234, 225, 0.3);
+}
+
+.save-inline-input-error {
+  border: 1px solid rgba(200, 60, 60, 0.6) !important;
+}
+
+.save-inline-btn {
+  background: none;
+  border: none;
+  border-radius: 3px;
+  color: rgba(237, 234, 225, 0.5);
+  cursor: pointer;
+  font-size: 0.6rem;
+  line-height: 1;
+  padding: 0;
+  width: 16px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: inherit;
+  transition: color 0.15s ease;
+  flex: 0 0 auto;
+}
+
+.save-inline-btn:hover {
+  color: rgba(237, 234, 225, 0.9);
+}
+
+.save-inline-btn svg {
+  width: 12px;
+  height: 12px;
+}
+
+.save-inline-close {
+  margin-left: auto;
+}
+
+.save-inline-confirm {
+  background: none;
+  border: none;
+  border-radius: 3px;
+  color: rgba(237, 234, 225, 0.5);
+  cursor: pointer;
+  font-size: 0.6rem;
+  line-height: 1;
+  padding: 0;
+  width: 18px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: inherit;
+  transition: color 0.15s ease;
+  flex: 0 0 auto;
+}
+
+.save-inline-confirm:hover {
+  color: rgba(237, 234, 225, 0.9);
+}
+
+.save-inline-confirm:disabled {
+  color: rgba(237, 234, 225, 0.2);
+  cursor: default;
+  cursor: default;
 }
 
 .error-scroll {
