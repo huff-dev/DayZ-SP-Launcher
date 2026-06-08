@@ -421,6 +421,9 @@ function renderModsList(mods) {
         modsList.appendChild(envRow);
         envRows.push(envRow);
       }
+      if (envRows.length > 0) {
+        envRows[envRows.length - 1].classList.add("mod-env-last");
+      }
     }
   });
 
@@ -1009,21 +1012,19 @@ function addNewGameInputRow() {
   if (newGameRowActive) return;
   newGameRowActive = true;
 
-  const tbody = document.getElementById("saves-list");
-  if (!tbody) return;
+  const container = document.getElementById("saves-list");
+  if (!container) return;
 
-  const row = document.createElement("tr");
-  row.className = "save-input-row";
+  const row = document.createElement("div");
+  row.className = "save-input-div";
   row.id = "new-game-input-row";
   row.innerHTML = `
-    <td colspan="3">
-      <div class="save-inline-row">
-        <input type="text" class="save-inline-input" placeholder="New save name.." />
-        <button class="save-inline-btn save-inline-close">${'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 6l12 12M6 18L18 6" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>'}</button>
-        <button class="save-inline-btn save-inline-confirm">&#10003;</button>
-      </div>
-    </td>`;
-  tbody.insertBefore(row, tbody.firstChild);
+    <div class="save-inline-row">
+      <input type="text" class="save-inline-input" placeholder="New save name.." />
+      <button class="save-inline-btn save-inline-close">${'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 6l12 12M6 18L18 6" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>'}</button>
+      <button class="save-inline-btn save-inline-confirm">&#10003;</button>
+    </div>`;
+  container.insertBefore(row, container.firstChild);
 
   const input = row.querySelector(".save-inline-input");
   const confirmBtn = row.querySelector(".save-inline-confirm");
@@ -1125,37 +1126,45 @@ window.appInfo.onProcessStatusUpdated((status) => {
 })();
 
 function renderSaves(saves) {
-  const tbody = document.getElementById("saves-list");
-  if (!tbody) return;
+  const container = document.getElementById("saves-list");
+  if (!container) return;
 
   const existingInput = document.getElementById("new-game-input-row");
-  tbody.innerHTML = "";
+  container.innerHTML = "";
 
   if (!saves || saves.length === 0) {
-    const row = document.createElement("tr");
-    row.innerHTML = '<td colspan="3" class="saves-empty">No saves yet</td>';
-    tbody.appendChild(row);
+    const empty = document.createElement("div");
+    empty.className = "saves-empty";
+    empty.textContent = "No saves yet";
+    container.appendChild(empty);
     selectedSaveSlot = null;
     if (continueBtn) { continueBtn.disabled = true; continueBtn.textContent = "Continue"; }
-    if (existingInput) tbody.insertBefore(existingInput, tbody.firstChild);
+    if (existingInput) container.insertBefore(existingInput, container.firstChild);
     return;
   }
 
   for (const [i, save] of saves.entries()) {
-    const row = document.createElement("tr");
-    row.className = "save-row" + (i === 0 ? " selected" : "");
+    const row = document.createElement("div");
+    row.className = "save-row save-row-div" + (i === 0 ? " selected" : "");
     row.dataset.slot = save.name;
+    row.dataset.path = save.path || "";
     const date = new Date(save.date);
     const pad = (n) => String(n).padStart(2, "0");
     const dateStr = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
-    const defaultTag = save.name === "default" ? ' <span class="save-default">(default)</span>' : "";
-    row.innerHTML = `<td>${save.name}${defaultTag}</td><td>${dateStr}</td><td class="col-del"><button class="save-del-btn" title="Delete save">${'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>'}</button></td>`;
-    tbody.appendChild(row);
+    const defaultTag = save.name === "default" ? '<span class="save-default"> (default)</span>' : "";
+    const svgFolder = '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>';
+    const svgDel = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>';
+    row.innerHTML = `
+      <span class="save-name">${save.name}${defaultTag}</span>
+      <span class="save-date">${dateStr}</span>
+      <button class="save-folder-btn" title="Open save folder">${svgFolder}</button>
+      <button class="save-del-btn" title="Delete save">${svgDel}</button>`;
+    container.appendChild(row);
   }
 
-  if (existingInput) tbody.insertBefore(existingInput, tbody.firstChild);
+  if (existingInput) container.insertBefore(existingInput, container.firstChild);
 
-  const firstSelected = tbody.querySelector(".save-row.selected");
+  const firstSelected = container.querySelector(".save-row.selected");
   if (firstSelected) {
     selectedSaveSlot = firstSelected.dataset.slot;
     checkSelectedSaveContent();
@@ -1175,6 +1184,13 @@ document.getElementById("saves-list")?.addEventListener("click", async (e) => {
     return;
   }
 
+  const folderBtn = e.target.closest(".save-folder-btn");
+  if (folderBtn) {
+    const row = folderBtn.closest(".save-row");
+    if (row && row.dataset.path) window.appInfo.openFolder(row.dataset.path);
+    return;
+  }
+
   const delBtn = e.target.closest(".save-del-btn");
   if (delBtn) {
     const row = delBtn.closest(".save-row");
@@ -1189,7 +1205,7 @@ document.getElementById("saves-list")?.addEventListener("click", async (e) => {
     if (!row) return;
     const input = row.querySelector(".save-inline-input");
     const slotName = input.value.trim();
-    if (!slotName || slotName === "1" || slotName === "default") {
+    if (!slotName || slotName.toLowerCase() === "old") {
       input.classList.add("save-inline-input-error");
       setTimeout(() => input.classList.remove("save-inline-input-error"), 1500);
       return;
