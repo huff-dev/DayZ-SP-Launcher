@@ -1174,6 +1174,10 @@ function renderSaves(saves) {
   }
 }
 
+document.addEventListener("click", () => {
+  document.querySelectorAll(".save-del-confirm").forEach(p => p.remove());
+});
+
 document.getElementById("saves-list")?.addEventListener("click", async (e) => {
   const saveRow = e.target.closest(".save-row");
   if (saveRow && !e.target.closest("button")) {
@@ -1193,8 +1197,23 @@ document.getElementById("saves-list")?.addEventListener("click", async (e) => {
 
   const delBtn = e.target.closest(".save-del-btn");
   if (delBtn) {
-    const row = delBtn.closest(".save-row");
-    if (row) window.appInfo.deleteSaveSlot(currentMap, row.dataset.slot);
+    e.stopPropagation();
+    if (document.querySelector(".save-del-confirm")) {
+      document.querySelectorAll(".save-del-confirm").forEach(p => p.remove());
+      return;
+    }
+    const popup = document.createElement("div");
+    popup.className = "save-del-confirm";
+    popup.textContent = "Delete?";
+    popup.addEventListener("click", async (ev) => {
+      ev.stopPropagation();
+      const row = ev.target.closest(".save-row");
+      if (row) {
+        await window.appInfo.deleteSaveSlot(currentMap, row.dataset.slot);
+        refreshSaves();
+      }
+    });
+    delBtn.parentNode.appendChild(popup);
     return;
   }
 
