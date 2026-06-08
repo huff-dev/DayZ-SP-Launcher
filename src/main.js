@@ -1,5 +1,5 @@
 const { app, BrowserWindow, Menu, ipcMain, shell, dialog } = require("electron");
-const { exec } = require("child_process");
+  const { exec, execSync } = require("child_process");
 const fs = require("fs");
 const fsp = require("fs/promises");
 const path = require("path");
@@ -1334,7 +1334,13 @@ ipcMain.handle("dayz:activate-save-slot", async (_event, map, slot) => {
         await fsp.rm(storage1Path, { recursive: true, force: true });
       }
     }
-    await fsp.symlink(userSavePath, storage1Path, 'junction');
+    try {
+      await fsp.symlink(userSavePath, storage1Path, 'junction');
+    } catch (linkErr) {
+      console.error("symlink failed, trying mklink:", linkErr.message);
+      const { execSync } = require("child_process");
+      execSync(`mklink /J "${storage1Path}" "${userSavePath}"`, { shell: "cmd" });
+    }
     activeSaveSlot = slot;
     activeSaveMap = map;
     return true;
