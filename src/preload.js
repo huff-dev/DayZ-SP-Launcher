@@ -67,6 +67,8 @@ contextBridge.exposeInMainWorld("appInfo", {
   activateSaveSlot: (map, slot) => ipcRenderer.invoke("dayz:activate-save-slot", map, slot),
   createSaveSlot: (map, slot) => ipcRenderer.invoke("dayz:create-save-slot", map, slot),
   checkSaveContent: (map, slot) => ipcRenderer.invoke("dayz:check-save-content", map, slot),
+  getSaveStats: (map, slot) => ipcRenderer.invoke("dayz:get-save-stats", map, slot),
+  openStatsWindow: (slot, statsJson) => ipcRenderer.invoke("dayz:open-stats-window", slot, statsJson),
   onSavesUpdated: (callback) => {
     const listener = (_event, saves) => callback(saves);
     ipcRenderer.on("dayz:saves-updated", listener);

@@ -1104,6 +1104,8 @@ input[type="checkbox"] {
   background: rgba(0, 0, 0, 0.35);
 }
 
+
+
 @keyframes slideIn {
   from {
     opacity: 0;
@@ -1121,6 +1123,7 @@ input[type="checkbox"] {
   align-items: center;
   gap: 6px;
   min-width: 0;
+  cursor: pointer;
 }
 
 .server-label {
@@ -1209,15 +1212,42 @@ input[type="checkbox"] {
 
 .save-row-div {
   position: relative;
-  display: grid;
-  grid-template-columns: 1fr auto auto auto;
+  display: flex;
   align-items: center;
   padding: 3px 8px;
   cursor: pointer;
   border-radius: 3px;
   transition: background 0.15s ease, color 0.15s ease;
   box-sizing: border-box;
+  gap: 6px;
 }
+
+.save-name-wrap {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+}
+
+.save-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.6rem;
+  color: rgba(237, 234, 225, 0.7);
+  font-family: 'Consolas', 'Courier New', monospace;
+  min-width: 0;
+}
+
+.save-date {
+  flex-shrink: 0;
+  font-size: 0.6rem;
+  color: rgba(237, 234, 225, 0.7);
+  font-family: 'Consolas', 'Courier New', monospace;
+  margin-right: 4px;
+}
+
+
 
 .save-row-div:hover {
   background: rgba(237, 234, 225, 0.04);
@@ -1231,21 +1261,31 @@ input[type="checkbox"] {
   color: rgba(180, 200, 120, 0.9);
 }
 
-.save-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 0.6rem;
-  color: rgba(237, 234, 225, 0.7);
-  font-family: 'Consolas', 'Courier New', monospace;
-}
-
 .save-date {
   flex-shrink: 0;
   font-size: 0.6rem;
   color: rgba(237, 234, 225, 0.7);
   font-family: 'Consolas', 'Courier New', monospace;
   margin-right: 12px;
+}
+
+.save-info-btn {
+  width: 10px;
+  height: 10px;
+  flex-shrink: 0;
+  cursor: pointer;
+  color: rgba(237, 234, 225, 0.35);
+  transition: color 0.15s ease, opacity 0.15s ease;
+  margin-left: 6px;
+  opacity: 0;
+}
+
+.save-row-div:hover .save-info-btn {
+  opacity: 1;
+}
+
+.save-info-btn:hover {
+  color: rgba(237, 234, 225, 0.8);
 }
 
 .save-folder-btn {
@@ -1509,7 +1549,7 @@ input[type="checkbox"] {
 .save-inline-row {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 6px;
   animation: saveSlideDown 0.2s ease;
   max-width: 100%;
   box-sizing: border-box;

@@ -103,6 +103,10 @@
               <input type="checkbox" id="offline-mode" />
               <label for="offline-mode" class="option-label">Offline Mode</label>
             </div>
+            <div class="option-item">
+              <input type="checkbox" id="no-zombies" />
+              <label for="no-zombies" class="option-label">No Zombies</label>
+            </div>
           </div>
         </div>
         <div class="button-row">
@@ -140,7 +144,7 @@
         <a id="update-link" class="update-link hidden">Update available</a>
       </div>
       <div class="status-right">
-        <div class="server-status" title="DayZ install status">
+        <div class="server-status" title="DayZ install status" id="open-game-folder">
           <span class="server-label">DayZ</span>
           <span
             class="server-indicator"
@@ -148,7 +152,7 @@
             aria-label="Checking DayZ"
           ></span>
         </div>
-        <div class="server-status" title="DayZ Server install status">
+        <div class="server-status" title="DayZ Server install status" id="open-server-folder">
           <span class="server-label">DayZ Server</span>
           <span
             class="server-indicator"

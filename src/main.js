@@ -527,8 +527,9 @@ function checkProcesses() {
         goldberg.removeGoldberg(null, goldbergServerPath);
       }
       if (isServerRunning && !running && activeSaveSlot) {
+        const savedMap = activeSaveMap;
         restoreActiveSave().then(async () => {
-          const saves = await scanSaves(activeSaveMap || "chernarus");
+          const saves = await scanSaves(savedMap || "chernarus");
           broadcastUpdate("dayz:saves-updated", saves);
         });
       }
@@ -1270,6 +1271,172 @@ ipcMain.handle("dayz:check-save-content", async (_event, map, slot) => {
   }
 });
 
+ipcMain.handle("dayz:get-save-stats", async (_event, map, slot) => {
+  const missionFolder = await resolveMissionFolder(map);
+  if (!missionFolder) return null;
+
+  const dbPath = path.join(savesUserPath(missionFolder), slot, "players.db");
+  try {
+    if (!(await pathExists(dbPath))) return null;
+
+    const { DatabaseSync } = require("node:sqlite");
+    const db = new DatabaseSync(dbPath, { readWrite: false });
+    const rows = db.prepare("SELECT Data FROM Players").all();
+    db.close();
+    if (!rows || rows.length === 0) return null;
+
+    const players = [];
+    for (const row of rows) {
+      const raw = row.Data;
+      if (!raw || !(raw instanceof Uint8Array)) continue;
+      const buf = Buffer.from(raw);
+      let i = 0;
+
+      const readFloat = () => { if (i + 4 > buf.length) return null; const v = buf.readFloatLE(i); i += 4; return v; };
+      const readStr = () => {
+        if (i >= buf.length) return null;
+        const len = buf[i]; i++;
+        if (i + len > buf.length) return null;
+        const s = buf.toString("utf8", i, i + len).replace(/\0/g, ""); i += len;
+        return s;
+      };
+
+      while (i < buf.length - 6) {
+        const peek = buf[i];
+        if (peek > 0 && peek < 60 && i + peek + 5 < buf.length) {
+          const s = buf.toString("utf8", i + 1, i + 1 + peek);
+          if (/^[a-z_]+$/.test(s) && s.length > 2) break;
+        }
+        i++;
+      }
+
+      const known = ["dist","players_killed","infected_killed","playtime","longest_survivor_hit","survivor_killed","infected_killed_headshot","meters_traveled","feet_traveled","shots_fired","shots_hit","mdf_immunityboost_state","mdf_mask_state","mdf_wetness_state","sfl_objects_searched","mdf_heatbuffer_state","mdf_common_cold_state"];
+      const stats = {};
+
+      while (i < buf.length - 6) {
+        const key = readStr();
+        if (!key || key.length < 2) break;
+        const val = readFloat();
+        if (val === null) break;
+        const name = key.replace(/\0/g, "");
+        if (known.includes(name) || /^[a-z_]+$/.test(name)) {
+          stats[name] = Math.round(val * 100) / 100;
+        }
+        if (buf[i] > 60 || buf[i] === 0) break;
+      }
+
+      if (Object.keys(stats).length > 0) {
+        if (stats.playtime) {
+          const h = Math.floor(stats.playtime / 3600);
+          const m = Math.floor((stats.playtime % 3600) / 60);
+          stats.playtime = h + "h " + m + "m";
+        }
+        if (stats.dist) stats.dist = Math.round(stats.dist) + "m";
+
+        // Read player model from header
+        let model = "";
+        for (let j = 0; j < 80; j++) {
+          const p = buf[j];
+          if (p > 0 && p < 30 && j + p + 4 < buf.length) {
+            const s = buf.toString("utf8", j + 1, j + 1 + p).replace(/[^\x20-\x7E]/g, "");
+            if (s.includes("Survivor")) { model = s; break; }
+          }
+        }
+        if (model) stats.player_model = model;
+
+        // Read 170-byte health blob
+        while (i < buf.length - 174) {
+          const size = buf.readInt32LE(i);
+          if (size >= 100 && size <= 200 && i + 4 + size <= buf.length) {
+            i += 4;
+            const block = buf.slice(i, i + size);
+            stats.blood = block[33];
+            stats.health = block.readInt16LE(106);
+            stats.hunger = block.readInt32LE(127);
+            stats.hydration = block.readInt32LE(132);
+            stats.bleeding = block[153];
+            break;
+          }
+          i++;
+        }
+
+        // Read inventory items (best effort - just extract names)
+        const items = [];
+        const seen = new Set();
+        while (i < buf.length - 6) {
+          const p = buf[i];
+          if (p > 0 && p < 60 && i + p + 6 < buf.length) {
+            const s = buf.toString("utf8", i + 1, i + 1 + p).replace(/\0/g, "");
+            if (/^[A-Z][a-zA-Z0-9_]+$/.test(s) && s.length > 3 && !seen.has(s)) {
+              seen.add(s);
+              items.push(s);
+              i += 1 + p + 20;
+              continue;
+            }
+          }
+          i++;
+        }
+        if (items.length > 0) stats.inventory = items;
+
+        players.push(stats);
+      }
+    }
+    return players.length > 0 ? players : null;
+  } catch {
+    return null;
+  }
+});
+
+let statsWindow = null;
+
+function refreshStatsContent(win, data) {
+  let html = "<div style='padding:12px 16px;font-family:Consolas,monospace;font-size:12px;color:#edeae1;background:#0c0c0c;height:100vh;overflow-y:hidden;box-sizing:border-box'>";
+  for (const player of data) {
+    html += "<div style='background:rgba(255,255,255,0.03);border-radius:6px;padding:10px 12px;margin-bottom:10px'>";
+    html += "<div style='font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:rgba(180,200,120,0.7);margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(180,200,120,0.12)'>Player Stats</div>";
+    for (const [k, v] of Object.entries(player)) {
+      if (typeof v !== "object") {
+        html += "<div style='display:flex;justify-content:space-between;padding:2px 0'><span style='color:rgba(237,234,225,0.4);font-size:11px'>" + k.replace(/_/g, ' ') + "</span><span style='color:rgba(237,234,225,0.85);font-size:11px'>" + v + "</span></div>";
+      }
+    }
+    html += "</div>";
+    for (const [k, v] of Object.entries(player)) {
+      if (Array.isArray(v) && v.length > 0) {
+        html += "<div style='background:rgba(255,255,255,0.03);border-radius:6px;padding:10px 12px;margin-bottom:10px'>";
+        html += "<div style='font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:rgba(237,234,225,0.45);margin-bottom:6px;padding-bottom:6px;border-bottom:1px solid rgba(237,234,225,0.06)'>" + k + " <span style='color:rgba(237,234,225,0.25)'>(" + v.length + ")</span></div>";
+        html += "<div style='max-height:200px;overflow-y:auto;scrollbar-width:none'>";
+        for (const item of v) {
+          const name = typeof item === "string" ? item : (item.name || item.item || "-");
+          html += "<div style='padding:1px 0 1px 4px;font-size:11px;color:rgba(237,234,225,0.5)'>" + name + "</div>";
+        }
+        html += "</div></div>";
+      }
+    }
+  }
+  html += "</div>";
+  win.loadURL("data:text/html;charset=utf-8," + encodeURIComponent("<html><body style='margin:0;background:#0c0c0c;overflow:hidden'>" + html + "</body></html>"));
+}
+
+ipcMain.handle("dayz:open-stats-window", async (_event, slot, statsJson) => {
+  if (statsWindow && !statsWindow.isDestroyed()) {
+    const data = JSON.parse(statsJson);
+    statsWindow.setTitle(slot + " - Save Stats");
+    refreshStatsContent(statsWindow, data);
+    return;
+  }
+  statsWindow = new BrowserWindow({
+    width: 400, height: 650, resizable: true,
+    autoHideMenuBar: true,
+    title: slot + " - Save Stats",
+    icon: path.join(__dirname, "images", "icon_rounded.png"),
+    webPreferences: { contextIsolation: true, nodeIntegration: false }
+  });
+  statsWindow.on("closed", () => { statsWindow = null; });
+  const data = JSON.parse(statsJson);
+  refreshStatsContent(statsWindow, data);
+  // statsWindow.webContents.openDevTools({ mode: "detach" });
+});
+
 ipcMain.handle("dayz:delete-storage", async (_event, map, slot) => {
   if (!dayzServerWatchPath) {
     const serverResult = await scanForDayzServer();
@@ -1477,7 +1644,7 @@ async function generateGameBatch(dayzGamePath, enabledMods) {
   }
 }
 
-async function applyQuickJoin(dayzServerPath, map, value, envFolder) {
+async function applyQuickJoin(dayzServerPath, map, value, envFolder, noZombies) {
   const missionFolders = {
     chernarus: "dayzOffline.chernarusplus",
     livonia: "dayzOffline.enoch",
@@ -1503,8 +1670,15 @@ async function applyQuickJoin(dayzServerPath, map, value, envFolder) {
         `$1${value}$2`
       );
 
+      const zombieValue = noZombies ? "0" : "1000";
+      content = content.replace(
+        /(<var name="ZombieMaxCount" type="0" value=")\d+("\/>)/,
+        `$1${zombieValue}$2`
+      );
+
       await fsp.writeFile(globalsPath, content);
       console.log(`Applied Quick Join (${value}) settings to ${globalsPath}`);
+      console.log(`Set ZombieMaxCount to ${zombieValue}`);
     }
   } catch (error) {
     console.error(`Failed to apply Quick Join to ${globalsPath}:`, error);
@@ -1673,7 +1847,7 @@ ipcMain.handle("dayz:launch", async (_event, dayzServerPath, map) => {
   }
 
   const timerValue = settings.quickJoin ? 0 : 15;
-  await applyQuickJoin(dayzServerPath, map, timerValue, customEnvFolder);
+  await applyQuickJoin(dayzServerPath, map, timerValue, customEnvFolder, !!settings.noZombies);
 
   const serverExePath = path.join(dayzServerPath, "DayZServer_x64.exe");
   lastServerExePath = serverExePath;
@@ -1794,6 +1968,7 @@ function createWindow() {
   // mainWindow.webContents.openDevTools({ mode: "detach" });
 
   mainWindow.on("closed", () => {
+    if (statsWindow && !statsWindow.isDestroyed()) statsWindow.close();
     mainWindow = null;
   });
 }

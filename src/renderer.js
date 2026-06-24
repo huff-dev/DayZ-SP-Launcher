@@ -11,6 +11,7 @@ const continueBtn = document.querySelector(".continue-button");
 const quickJoinCheckbox = document.getElementById("quick-join");
 const disableBECheckbox = document.getElementById("disable-be");
 const offlineModeCheckbox = document.getElementById("offline-mode");
+const noZombiesCheckbox = document.getElementById("no-zombies");
 
 const versionSpan = document.getElementById("app-version");
 window.appInfo.getVersion().then(v => { versionSpan.textContent = `v${v}`; });
@@ -31,6 +32,13 @@ window.appInfo.onUpdateAvailable((info) => {
 updateLink?.addEventListener("click", (e) => {
   e.preventDefault();
   if (updateLink.dataset.url) window.appInfo.openExternal(updateLink.dataset.url);
+});
+
+document.getElementById("open-game-folder")?.addEventListener("click", () => {
+  if (gameInstallPath) window.appInfo.openFolder(gameInstallPath);
+});
+document.getElementById("open-server-folder")?.addEventListener("click", () => {
+  if (serverInstallPath) window.appInfo.openFolder(serverInstallPath);
 });
 
 document.getElementById("minimize")?.addEventListener("click", () => {
@@ -500,9 +508,13 @@ disableBECheckbox?.addEventListener("change", () => {
   window.appInfo?.saveSetting?.("disableBE", disableBECheckbox.checked);
 });
 
-offlineModeCheckbox?.addEventListener("change", () => {
-  window.appInfo?.saveSetting?.("offlineMode", offlineModeCheckbox.checked);
-});
+  offlineModeCheckbox?.addEventListener("change", () => {
+    window.appInfo?.saveSetting?.("offlineMode", offlineModeCheckbox.checked);
+  });
+
+  noZombiesCheckbox?.addEventListener("change", () => {
+    window.appInfo?.saveSetting?.("noZombies", noZombiesCheckbox.checked);
+  });
 
 (async () => {
   const settings = await window.appInfo?.getAllSettings?.() || {};
@@ -510,10 +522,12 @@ offlineModeCheckbox?.addEventListener("change", () => {
   const quickJoin = !!settings.quickJoin;
   const disableBE = !!settings.disableBE;
   const offlineMode = !!settings.offlineMode;
+  const noZombies = !!settings.noZombies;
 
   if (quickJoinCheckbox) quickJoinCheckbox.checked = quickJoin;
   if (disableBECheckbox) disableBECheckbox.checked = disableBE;
   if (offlineModeCheckbox) offlineModeCheckbox.checked = offlineMode;
+  if (noZombiesCheckbox) noZombiesCheckbox.checked = noZombies;
 
   const envName = settings.selectedMapEnv || "";
   const envFolderName = settings.selectedMapEnvFolder || "";
@@ -549,11 +563,15 @@ function setStatusIndicator(indicator, state, label) {
   indicator.setAttribute("aria-label", label);
 }
 
+let gameInstallPath = null;
+let serverInstallPath = null;
+
 function updateServerStatus(result) {
   const state = result.found ? "online" : "offline";
   const label = result.found ? "DayZ Server found" : "DayZ Server not found";
   setStatusIndicator(serverIndicator, state, label);
   if (result.found) {
+    serverInstallPath = result.installPath;
     refreshSaves();
   }
 }
@@ -562,6 +580,7 @@ function updateGameStatus(result) {
   const state = result.found ? "online" : "offline";
   const label = result.found ? "DayZ found" : "DayZ not found";
   setStatusIndicator(gameIndicator, state, label);
+  if (result.found) gameInstallPath = result.installPath;
 
   const sakhalBtn = document.querySelector('[data-map="sakhal"]');
   if (sakhalBtn) {
@@ -977,6 +996,7 @@ async function checkSelectedSaveContent() {
   const slot = selectedSaveSlot;
   const hasContent = await window.appInfo.checkSaveContent(currentMap, slot);
   if (selectedSaveSlot !== slot) return;
+  if (isServerRunningLocal) { continueBtn.disabled = true; return; }
   continueBtn.disabled = false;
   continueBtn.textContent = hasContent ? "Continue" : "Launch";
 }
@@ -1149,8 +1169,9 @@ function renderSaves(saves) {
     const defaultTag = save.name === "default" ? '<span class="save-default"> (default)</span>' : "";
     const svgFolder = '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>';
     const svgDel = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>';
+    const svgInfo = '<svg class="save-info-btn" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>';
     row.innerHTML = `
-      <span class="save-name">${save.name}${defaultTag}</span>
+      <span class="save-name-wrap"><span class="save-name">${save.name}${defaultTag}</span>${svgInfo}</span>
       <span class="save-date">${dateStr}</span>
       <button class="save-folder-btn" title="Open save folder">${svgFolder}</button>
       <button class="save-del-btn" title="Delete save">${svgDel}</button>`;
@@ -1174,8 +1195,20 @@ document.addEventListener("click", () => {
 });
 
 document.getElementById("saves-list")?.addEventListener("click", async (e) => {
+  const infoBtn = e.target.closest(".save-info-btn");
+  if (infoBtn) {
+    const row = infoBtn.closest(".save-row");
+    if (row) {
+      const stats = await window.appInfo.getSaveStats(currentMap, row.dataset.slot);
+      if (stats && stats.length > 0) {
+        window.appInfo.openStatsWindow(row.dataset.slot, JSON.stringify(stats));
+      }
+    }
+    return;
+  }
+
   const saveRow = e.target.closest(".save-row");
-  if (saveRow && !e.target.closest("button")) {
+  if (saveRow && !e.target.closest("button") && !e.target.closest(".save-info-btn")) {
     document.querySelectorAll(".save-row.selected").forEach(r => r.classList.remove("selected"));
     saveRow.classList.add("selected");
     selectedSaveSlot = saveRow.dataset.slot;
