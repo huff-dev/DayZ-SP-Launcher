@@ -856,9 +856,9 @@ async function generatePresetContent(enabledMods) {
 
   const enabledFolderNames = new Set(enabledMods.map(m => m.folderName));
 
-  const steamIds = workshopMods
-    .filter(m => enabledFolderNames.has(m.folderName) && m.publishedId)
-    .map(m => m.publishedId);
+    const steamIds = workshopMods
+      .filter(m => enabledFolderNames.has(m.folderName) && m.publishedId && m.publishedId !== "0")
+      .map(m => m.publishedId);
 
   const localPaths = localMods
     .filter(m => enabledFolderNames.has(m.folderName))
@@ -937,7 +937,7 @@ ipcMain.handle("dayz:apply-preset", async (_event, filename) => {
     ]);
 
     const workshopEnabled = workshopMods
-      .filter(mod => presetSteamIds.includes(mod.publishedId))
+      .filter(mod => mod.publishedId && mod.publishedId !== "0" && presetSteamIds.includes(mod.publishedId))
       .map(mod => ({ name: mod.name, folderName: mod.folderName, local: false, fullPath: null }));
 
     const localEnabled = localMods
@@ -1043,7 +1043,7 @@ ipcMain.handle("dayz:check-preset-dirty", async (_event, filename) => {
     const presetLocalPaths = [];
     let match;
     while ((match = steamRegex.exec(content)) !== null) {
-      presetSteamIds.push(match[1]);
+      if (match[1] !== "0") presetSteamIds.push(match[1]);
     }
     while ((match = localRegex.exec(content)) !== null) {
       presetLocalPaths.push(match[1]);
@@ -1060,7 +1060,7 @@ ipcMain.handle("dayz:check-preset-dirty", async (_event, filename) => {
     const enabledFolderNames = new Set(enabledMods.map(m => m.folderName));
 
     const currentSteamIds = workshopMods
-      .filter(m => enabledFolderNames.has(m.folderName) && m.publishedId)
+      .filter(m => enabledFolderNames.has(m.folderName) && m.publishedId && m.publishedId !== "0")
       .map(m => m.publishedId);
 
     const currentLocalPaths = localMods
