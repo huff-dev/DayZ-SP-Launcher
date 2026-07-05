@@ -513,7 +513,6 @@ function killServer() {
 }
 
 function checkProcesses() {
-  
   exec(`wmic process where "name='DayZServer_x64.exe'" get commandline`, (error, stdout) => {
     const running = !error && stdout.includes(SERVER_NAME_ARG);
     if (running !== isServerRunning) {
@@ -538,13 +537,10 @@ function checkProcesses() {
     }
   });
 
-  
   exec(`wmic process where "name='DayZ_x64.exe' or name='DayZ_BE.exe'" get commandline`, (error, stdout) => {
-    
     const running = !error && stdout.trim().length > 0 && (stdout.includes("DayZ_x64.exe") || stdout.includes("DayZ_BE.exe"));
     
     if (isGameRunning && !running) {
-      
       console.log("DayZ Game exit detected.");
       if (isServerRunning) {
         killServer();
@@ -1505,7 +1501,6 @@ ipcMain.handle("dayz:activate-save-slot", async (_event, map, slot) => {
       await fsp.symlink(userSavePath, storage1Path, 'junction');
     } catch (linkErr) {
       console.error("symlink failed, trying mklink:", linkErr.message);
-      const { execSync } = require("child_process");
       execSync(`mklink /J "${storage1Path}" "${userSavePath}"`, { shell: "cmd" });
     }
     activeSaveSlot = slot;
@@ -1561,7 +1556,9 @@ ipcMain.handle("dayz:create-save-slot", async (_event, map, slot) => {
 });
 
 async function generateServerConfig(dayzServerPath, map, envFolder) {
-  const templatePath = path.join(__dirname, "scripts", "DayzSPL.cfg");
+  const userTemplatePath = path.join(getTemplatesUserDir(), "DayzSPL.cfg");
+  const srcTemplatePath = path.join(__dirname, "scripts", "DayzSPL.cfg");
+  const templatePath = (await pathExists(userTemplatePath)) ? userTemplatePath : srcTemplatePath;
   const destConfigPath = path.join(dayzServerPath, "DayzSPL.cfg");
 
   try {
@@ -1589,7 +1586,9 @@ async function generateServerConfig(dayzServerPath, map, envFolder) {
 }
 
 async function generateServerBatch(dayzServerPath, enabledMods) {
-  const templatePath = path.join(__dirname, "scripts", "!DayzSPL.bat");
+  const userBatchPath = path.join(getTemplatesUserDir(), "!DayzSPL.bat");
+  const srcBatchPath = path.join(__dirname, "scripts", "!DayzSPL.bat");
+  const templatePath = (await pathExists(userBatchPath)) ? userBatchPath : srcBatchPath;
   const destBatchPath = path.join(dayzServerPath, "!DayzSPL.bat");
   const exePath = path.join(dayzServerPath, "DayZServer_x64.exe");
 
@@ -1621,7 +1620,9 @@ async function generateServerBatch(dayzServerPath, enabledMods) {
 }
 
 async function generateGameBatch(dayzGamePath, enabledMods) {
-  const templatePath = path.join(__dirname, "scripts", "!Dayz.bat");
+  const userBatchPath = path.join(getTemplatesUserDir(), "!Dayz.bat");
+  const srcBatchPath = path.join(__dirname, "scripts", "!Dayz.bat");
+  const templatePath = (await pathExists(userBatchPath)) ? userBatchPath : srcBatchPath;
   const destBatchPath = path.join(dayzGamePath, "!Dayz.bat");
 
   try {
@@ -1685,9 +1686,9 @@ async function applyQuickJoin(dayzServerPath, map, value, envFolder, noZombies) 
   }
 }
 
-ipcMain.handle("dayz:launch", async (_event, dayzServerPath, map) => {
+ipcMain.handle("dayz:launch", async (_event, dayzServerPath, map, bypass) => {
   const settings = await getSettings();
-  const enabledMods = settings.enabledMods || []; 
+  const enabledMods = bypass ? [] : (settings.enabledMods || []);
   const lastSyncTimes = settings.lastSyncTimes || {};
   
   if (!dayzServerPath || !(await pathExists(dayzServerPath))) {
@@ -1703,19 +1704,24 @@ ipcMain.handle("dayz:launch", async (_event, dayzServerPath, map) => {
   if (!(await pathExists(workshopPath))) {
     return { success: false, message: "Workshop content directory not found" };
   }
-  const [allWorkshopMods, allLocalMods] = await Promise.all([
-    scanWorkshopMods(dayzGameWatchPath),
-    scanLocalMods()
-  ]);
-  const modsByFolder = new Map();
-  for (const m of [...allWorkshopMods, ...allLocalMods]) {
-    modsByFolder.set(m.folderName, m);
+  let modsByFolder = new Map();
+  let allWorkshopMods = [], allLocalMods = [];
+  if (!bypass) {
+    const mods = await Promise.all([
+      scanWorkshopMods(dayzGameWatchPath),
+      scanLocalMods()
+    ]);
+    allWorkshopMods = mods[0];
+    allLocalMods = mods[1];
+    for (const m of [...allWorkshopMods, ...allLocalMods]) {
+      modsByFolder.set(m.folderName, m);
+    }
   }
 
   // Determine custom map env folder and source mod
   let customEnvFolder = "";
   let customEnvModFolder = "";
-  if (map === "custom") {
+  if (map === "custom" && !bypass) {
     const selectedEnv = settings.selectedMapEnv || "";
     const selectedEnvFolder = settings.selectedMapEnvFolder || "";
     if (selectedEnv && selectedEnvFolder && enabledMods.some(em => em.folderName === selectedEnvFolder)) {
@@ -1733,8 +1739,18 @@ ipcMain.handle("dayz:launch", async (_event, dayzServerPath, map) => {
     }
   }
 
+
   try {
-    const profilesPath = path.join(dayzServerPath, "Profiles", "DayzSPL");
+    const serverBatchPath = path.join(getTemplatesUserDir(), "!DayzSPL.bat");
+    const srcBatchPath = path.join(__dirname, "scripts", "!DayzSPL.bat");
+    const batchPath = (await pathExists(serverBatchPath)) ? serverBatchPath : srcBatchPath;
+    let profilesFolder = "Profiles\\DayzSPL";
+    try {
+      const batchContent = await fsp.readFile(batchPath, "utf8");
+      const match = batchContent.match(/set\s+PROFILES_FOLDER\s*=\s*(.+)/);
+      if (match) profilesFolder = match[1].trim();
+    } catch {}
+    const profilesPath = path.join(dayzServerPath, profilesFolder);
     if (await pathExists(profilesPath)) {
       const entries = await fsp.readdir(profilesPath, { withFileTypes: true });
       for (const entry of entries) {
@@ -1747,9 +1763,27 @@ ipcMain.handle("dayz:launch", async (_event, dayzServerPath, map) => {
       }
     }
 
-    await generateServerConfig(dayzServerPath, map, customEnvFolder);
-    await generateServerBatch(dayzServerPath, enabledMods);
-    await generateGameBatch(dayzGameWatchPath, enabledMods);
+    if (bypass) {
+      // In bypass mode, just copy templates as-is without any modifications
+      const cfgSrc = (await pathExists(path.join(getTemplatesUserDir(), "DayzSPL.cfg")))
+        ? path.join(getTemplatesUserDir(), "DayzSPL.cfg")
+        : path.join(__dirname, "scripts", "DayzSPL.cfg");
+      await fsp.copyFile(cfgSrc, path.join(dayzServerPath, "DayzSPL.cfg"));
+      const batSrc = (await pathExists(path.join(getTemplatesUserDir(), "!DayzSPL.bat")))
+        ? path.join(getTemplatesUserDir(), "!DayzSPL.bat")
+        : path.join(__dirname, "scripts", "!DayzSPL.bat");
+      let batContent = await fsp.readFile(batSrc, "utf8");
+      batContent = batContent.replace(/"DayZServer_x64\.exe"/g, `"${path.join(dayzServerPath, "DayZServer_x64.exe")}"`);
+      await fsp.writeFile(path.join(dayzServerPath, "!DayzSPL.bat"), batContent);
+      const gameBatSrc = (await pathExists(path.join(getTemplatesUserDir(), "!Dayz.bat")))
+        ? path.join(getTemplatesUserDir(), "!Dayz.bat")
+        : path.join(__dirname, "scripts", "!Dayz.bat");
+      await fsp.copyFile(gameBatSrc, path.join(dayzGameWatchPath, "!Dayz.bat"));
+    } else {
+      await generateServerConfig(dayzServerPath, map, customEnvFolder);
+      await generateServerBatch(dayzServerPath, enabledMods);
+      await generateGameBatch(dayzGameWatchPath, enabledMods);
+    }
   } catch (error) {
     return { success: false, message: `Failed to generate launch files: ${error.message}` };
   }
@@ -1788,7 +1822,11 @@ ipcMain.handle("dayz:launch", async (_event, dayzServerPath, map) => {
           }
           await fsp.rm(dest, { recursive: true, force: true });
         }
-        await fsp.symlink(source, dest, 'junction');
+        try {
+          await fsp.symlink(source, dest, 'junction');
+        } catch {
+          execSync(`mklink /J "${dest}" "${source}"`, { shell: "cmd" });
+        }
         return true;
       };
 
@@ -1823,8 +1861,10 @@ ipcMain.handle("dayz:launch", async (_event, dayzServerPath, map) => {
   }  
 
   
-  settings.lastSyncTimes = lastSyncTimes;
-  await saveSettings();
+  if (!bypass) {
+    settings.lastSyncTimes = lastSyncTimes;
+    await saveSettings();
+  }
 
   // Copy map env folder to mpmissions for custom maps
   if (customEnvFolder && customEnvModFolder) {
@@ -1847,7 +1887,19 @@ ipcMain.handle("dayz:launch", async (_event, dayzServerPath, map) => {
   }
 
   const timerValue = settings.quickJoin ? 0 : 15;
-  await applyQuickJoin(dayzServerPath, map, timerValue, customEnvFolder, !!settings.noZombies);
+  if (bypass) {
+    // Read map from the .cfg file in bypass mode
+    const cfgPath = path.join(dayzServerPath, "DayzSPL.cfg");
+    let cfgMap = "";
+    try {
+      const cfgContent = await fsp.readFile(cfgPath, "utf8");
+      const match = cfgContent.match(/template\s*=\s*"([^"]+)"/);
+      if (match) cfgMap = match[1];
+    } catch {}
+    await applyQuickJoin(dayzServerPath, "chernarus", timerValue, cfgMap, !!settings.noZombies);
+  } else {
+    await applyQuickJoin(dayzServerPath, map, timerValue, customEnvFolder, !!settings.noZombies);
+  }
 
   const serverExePath = path.join(dayzServerPath, "DayZServer_x64.exe");
   lastServerExePath = serverExePath;
@@ -1878,9 +1930,8 @@ ipcMain.handle("dayz:launch", async (_event, dayzServerPath, map) => {
   
   try {
     const serverBatchPath = path.join(dayzServerPath, "!DayzSPL.bat");
-    shell.openPath(serverBatchPath);
-    
     const gameBatchPath = path.join(dayzGameWatchPath, "!Dayz.bat");
+    shell.openPath(serverBatchPath);
     shell.openPath(gameBatchPath);
   } catch (launchError) {
     errors.push(`Failed to execute batch files: ${launchError.message}`);
@@ -1906,6 +1957,99 @@ ipcMain.handle("dayz:launch-launcher", async () => {
   }
   exec(`start "" "${launcherPath}"`);
   return { success: true };
+});
+
+const TEMPLATE_NAMES = ["DayzSPL.cfg", "!DayzSPL.bat", "!Dayz.bat"];
+function getTemplatesUserDir() {
+  return path.join(app.getPath("userData"), "templates");
+}
+function getTemplatesSrcDir() {
+  return path.join(__dirname, "scripts");
+}
+
+ipcMain.handle("tpl:init", async () => {
+  const userDir = getTemplatesUserDir();
+  const srcDir = getTemplatesSrcDir();
+  try {
+    await fsp.mkdir(userDir, { recursive: true });
+    for (const name of TEMPLATE_NAMES) {
+      const dest = path.join(userDir, name);
+      try {
+        await fsp.access(dest);
+      } catch {
+        await fsp.copyFile(path.join(srcDir, name), dest);
+      }
+    }
+    return { success: true };
+  } catch (error) {
+    return { success: false, message: error.message };
+  }
+});
+
+ipcMain.handle("tpl:read", async (_event, filename) => {
+  const userPath = path.join(getTemplatesUserDir(), filename);
+  try {
+    const content = await fsp.readFile(userPath, "utf8");
+    return { success: true, content };
+  } catch (error) {
+    return { success: false, message: error.message };
+  }
+});
+
+ipcMain.handle("tpl:save", async (_event, filename, content) => {
+  const userPath = path.join(getTemplatesUserDir(), filename);
+  try {
+    await fsp.writeFile(userPath, content, "utf8");
+    return { success: true };
+  } catch (error) {
+    return { success: false, message: error.message };
+  }
+});
+
+ipcMain.handle("tpl:restore-defaults", async (_event, filename) => {
+  const srcDir = getTemplatesSrcDir();
+  const userDir = getTemplatesUserDir();
+  try {
+    await fsp.copyFile(path.join(srcDir, filename), path.join(userDir, filename));
+    const content = await fsp.readFile(path.join(userDir, filename), "utf8");
+    return { success: true, content };
+  } catch (error) {
+    return { success: false, message: error.message };
+  }
+});
+
+ipcMain.handle("tpl:read-original", async (_event, filename) => {
+  const srcPath = path.join(getTemplatesSrcDir(), filename);
+  try {
+    const content = await fsp.readFile(srcPath, "utf8");
+    return { success: true, content };
+  } catch (error) {
+    return { success: false, message: error.message };
+  }
+});
+
+ipcMain.handle("dayz:read-cfg-map", async (_event, dayzServerPath) => {
+  try {
+    const cfgPath = path.join(dayzServerPath, "DayzSPL.cfg");
+    const content = await fsp.readFile(cfgPath, "utf8");
+    const match = content.match(/template\s*=\s*"([^"]+)"/);
+    return { success: true, map: match ? match[1] : "" };
+  } catch (error) {
+    return { success: false, message: error.message };
+  }
+});
+
+ipcMain.handle("dayz:delete-server-storage", async (_event, dayzServerPath, missionFolder) => {
+  if (!dayzServerPath || !missionFolder) return false;
+  const storagePath = path.join(dayzServerPath, "mpmissions", missionFolder, "storage_1");
+  try {
+    if (await pathExists(storagePath)) {
+      await fsp.rm(storagePath, { recursive: true, force: true });
+    }
+    return true;
+  } catch {
+    return false;
+  }
 });
 
 ipcMain.on("app:minimize", () => {
@@ -1965,7 +2109,7 @@ function createWindow() {
 
   mainWindow.loadFile(path.join(__dirname, "index.html"));
 
-  // mainWindow.webContents.openDevTools({ mode: "detach" });
+  mainWindow.webContents.openDevTools({ mode: "detach" });
 
   mainWindow.on("closed", () => {
     if (statsWindow && !statsWindow.isDestroyed()) statsWindow.close();

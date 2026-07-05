@@ -21,7 +21,7 @@ contextBridge.exposeInMainWorld("appInfo", {
     ipcRenderer.on("dayz:mods-updated", listener);
     return () => ipcRenderer.removeListener("dayz:mods-updated", listener);
   },
-  launchDayZ: (serverPath, map) => ipcRenderer.invoke("dayz:launch", serverPath, map),
+  launchDayZ: (serverPath, map, bypass) => ipcRenderer.invoke("dayz:launch", serverPath, map, bypass),
   checkMapStorage: (map) => ipcRenderer.invoke("dayz:check-storage", map),
   checkCFWarning: (map, slot) => ipcRenderer.invoke("dayz:check-cf-warning", map, slot),
   deleteMapStorage: (map, slot) => ipcRenderer.invoke("dayz:delete-storage", map, slot),
@@ -73,5 +73,12 @@ contextBridge.exposeInMainWorld("appInfo", {
     const listener = (_event, saves) => callback(saves);
     ipcRenderer.on("dayz:saves-updated", listener);
     return () => ipcRenderer.removeListener("dayz:saves-updated", listener);
-  }
+  },
+  readTemplateFile: (filename) => ipcRenderer.invoke("tpl:read", filename),
+  initTemplates: () => ipcRenderer.invoke("tpl:init"),
+  saveTemplateFile: (filename, content) => ipcRenderer.invoke("tpl:save", filename, content),
+  restoreTemplateDefaults: (filename) => ipcRenderer.invoke("tpl:restore-defaults", filename),
+  readOriginalTemplateFile: (filename) => ipcRenderer.invoke("tpl:read-original", filename),
+  readCfgMap: (serverPath) => ipcRenderer.invoke("dayz:read-cfg-map", serverPath),
+  deleteServerStorage: (serverPath, missionFolder) => ipcRenderer.invoke("dayz:delete-server-storage", serverPath, missionFolder)
 });

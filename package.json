@@ -10,7 +10,8 @@
   "scripts": {
     "start": "electron .",
     "dev": "nodemon",
-    "build": "electron-builder --win portable"
+    "build": "electron-builder --win portable",
+    "build:linux": "electron-builder --linux AppImage"
   },
   "build": {
     "appId": "com.dayzsp.app",
@@ -23,6 +24,10 @@
     ],
     "win": {
       "target": "portable",
+      "icon": "src/images/icon_rounded.png"
+    },
+    "linux": {
+      "target": "AppImage",
       "icon": "src/images/icon_rounded.png"
     },
     "portable": {

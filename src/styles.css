@@ -130,6 +130,17 @@ header {
   opacity: 1;
 }
 
+.bypass-active .map-selector {
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+.bypass-active .mods-container,
+.bypass-active .saves-container {
+  opacity: 0.35;
+  pointer-events: none;
+}
+
 .map-selector {
   display: flex;
   justify-content: center;
@@ -1104,6 +1115,308 @@ input[type="checkbox"] {
   background: rgba(0, 0, 0, 0.35);
 }
 
+#config-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#config-overlay.hidden {
+  display: none;
+}
+
+.config-overlay-content {
+  background: #1a1a1a;
+  border: 1px solid rgba(237, 234, 225, 0.1);
+  border-radius: 8px;
+  width: 500px;
+  max-width: 90vw;
+  height: 85vh;
+  max-height: 90vh;
+  padding: 0;
+  position: relative;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+}
+
+.config-overlay-titlebar {
+  display: flex;
+  align-items: center;
+  height: 30px;
+  flex-shrink: 0;
+  padding: 0 8px;
+  position: relative;
+}
+
+.config-titlebar-left {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.config-overlay-close {
+  background: none;
+  border: none;
+  color: rgba(237, 234, 225, 0.4);
+  font-size: 1.2rem;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+  margin-left: auto;
+  transition: color 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+}
+
+.config-overlay-close:hover {
+  color: rgba(237, 234, 225, 0.9);
+}
+
+.config-sidebar-toggle {
+  background: none;
+  border: none;
+  color: rgba(237, 234, 225, 0.35);
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+}
+
+.config-sidebar-toggle svg {
+  width: 16px;
+  height: 16px;
+}
+
+.config-sidebar-toggle:hover {
+  color: rgba(237, 234, 225, 0.8);
+}
+
+.config-save-btn {
+  background: none;
+  border: none;
+  color: rgba(237, 234, 225, 0.35);
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  transition: color 0.15s ease;
+}
+
+.config-save-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.config-save-btn:hover {
+  color: rgba(237, 234, 225, 0.8);
+}
+
+.config-bypass-btn {
+  background: none;
+  border: none;
+  color: rgba(237, 234, 225, 0.35);
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  transition: color 0.15s ease;
+}
+
+.config-bypass-btn svg {
+  width: 20px;
+  height: 20px;
+}
+
+.config-bypass-btn:hover {
+  color: rgba(237, 234, 225, 0.8);
+}
+
+.config-bypass-btn.active {
+  color: #d96a5f;
+}
+
+.config-bypass-btn.active:hover {
+  color: #e8847a;
+}
+
+.config-filename-display {
+  font-size: 0.75rem;
+  font-family: 'Consolas', 'Courier New', monospace;
+  color: rgba(237, 234, 225, 0.7);
+  white-space: nowrap;
+  pointer-events: none;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.config-overlay-left.collapsed {
+  display: none;
+}
+
+.config-overlay-columns {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.config-overlay-left {
+  flex-shrink: 0;
+  border-right: 1px solid rgba(237, 234, 225, 0.1);
+  overflow-y: auto;
+  white-space: nowrap;
+  width: 120px;
+}
+
+.config-overlay-right {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+
+.config-file-row {
+  padding: 3px 8px;
+  font-size: 0.6rem;
+  font-family: 'Consolas', 'Courier New', monospace;
+  color: rgba(237, 234, 225, 0.7);
+  cursor: pointer;
+  border-radius: 3px;
+  transition: background 0.15s ease, color 0.15s ease;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.config-file-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.config-restore-btn {
+  background: none;
+  border: none;
+  color: rgba(237, 234, 225, 0.3);
+  cursor: pointer;
+  padding: 0;
+  visibility: hidden;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  transition: color 0.15s ease, visibility 0s;
+  display: flex;
+}
+
+.config-restore-btn svg {
+  width: 20px;
+  height: 20px;
+}
+
+.config-restore-btn:hover {
+  color: rgba(237, 234, 225, 0.8);
+}
+
+.config-file-row:hover {
+  background: rgba(237, 234, 225, 0.06);
+  color: rgba(237, 234, 225, 0.9);
+}
+
+.config-file-row.active {
+  background: rgba(237, 234, 225, 0.1);
+  color: #edeae1;
+  border-radius: 0;
+}
+
+.config-text-wrap {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(237, 234, 225, 0.2) transparent;
+}
+
+.config-text-wrap::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.config-text-wrap::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.config-text-wrap::-webkit-scrollbar-thumb {
+  background: rgba(237, 234, 225, 0.2);
+  border-radius: 3px;
+}
+
+.config-text-wrap::-webkit-scrollbar-thumb:hover {
+  background: rgba(237, 234, 225, 0.35);
+}
+
+.config-line-numbers {
+  margin: 0;
+  padding: 0 8px 0 16px;
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 0.6rem;
+  line-height: 1.5;
+  color: rgba(237, 234, 225, 0.3);
+  text-align: right;
+  user-select: none;
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+
+.config-text-viewer {
+  margin: 0;
+  padding: 0;
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 0.6rem;
+  color: rgba(237, 234, 225, 0.85);
+  white-space: pre;
+  line-height: 1.5;
+  flex-shrink: 0;
+  outline: none;
+}
+
+.config-text-viewer::selection {
+  background: #444444;
+}
+
+.config-text-viewer ::selection {
+  background: #444444;
+}
+
+.config-text-error {
+  color: #e06c75;
+  font-size: 0.7rem;
+  padding: 8px;
+}
+
 
 
 @keyframes slideIn {
@@ -1443,19 +1756,54 @@ input[type="checkbox"] {
   margin-bottom: 6px;
 }
 
-.options-header {
-  margin: 0 0 4px;
-  padding: 4px;
-  font-size: 0.65rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  color: rgba(237, 234, 225, 0.6);
+.options-header-wrapper {
   text-align: center;
   background: #141414;
   border-bottom: 1px solid rgba(237, 234, 225, 0.05);
   border-top-left-radius: 8px;
   border-top-right-radius: 8px;
+  position: relative;
+}
+
+.options-header {
+  margin: 0;
+  padding: 4px 0;
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: rgba(237, 234, 225, 0.6);
+  display: inline-block;
+  position: relative;
+}
+
+.options-gear-btn {
+  position: absolute;
+  right: -18px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  border: none;
+  border-radius: 3px;
+  color: rgba(237, 234, 225, 0.35);
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.options-gear-btn svg {
+  width: 12px;
+  height: 12px;
+}
+
+.options-gear-btn:hover {
+  color: rgba(237, 234, 225, 0.8);
 }
 
 .options-grid {

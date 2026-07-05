@@ -89,7 +89,15 @@
           <div id="saves-list"></div>
         </div>
         <div class="options-container">
-          <h2 class="options-header">Options</h2>
+          <div class="options-header-wrapper">
+            <h2 class="options-header">Options
+              <button class="options-gear-btn" id="options-gear-btn" title="Edit server config">
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path>
+                </svg>
+              </button>
+            </h2>
+          </div>
           <div class="options-grid">
             <div class="option-item">
               <input type="checkbox" id="quick-join" />
@@ -164,6 +172,61 @@
       </div>
     </footer>
     <div id="server-overlay" class="hidden"></div>
+    <div id="config-overlay" class="hidden">
+      <div class="config-overlay-content">
+        <div class="config-overlay-titlebar">
+          <div class="config-titlebar-left">
+            <button id="config-sidebar-toggle" class="config-sidebar-toggle" title="Toggle sidebar">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round">
+                <path d="M3 6h18M3 12h18M3 18h18"/>
+              </svg>
+            </button>
+            <button id="config-save-btn" class="config-save-btn" title="Save">
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M17 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7l-4-4zm-5 16a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm3-10H5V5h10v4z"/>
+              </svg>
+            </button>
+            <button id="config-bypass-btn" class="config-bypass-btn" title="Bypass launcher options (Manual mode): This button disables the launcher's features and allows you to edit everything manually">
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M20 16L23 13L20 10V12H18.748C17.8599 8.54955 14.7277 6 11 6C7.27232 6 4.14012 8.54955 3.25203 12H1V14H5C5 10.6863 7.68629 8 11 8C14.3137 8 17 10.6863 17 14H20V16Z"/>
+                <path d="M15 14C15 16.2091 13.2092 18 11 18C8.7909 18 7.00004 16.2091 7.00004 14C7.00004 11.7909 8.7909 10 11 10C13.2092 10 15 11.7909 15 14Z"/>
+              </svg>
+            </button>
+          </div>
+          <span id="config-filename-display" class="config-filename-display"></span>
+          <button id="config-overlay-close" class="config-overlay-close" title="Close">&times;</button>
+        </div>
+        <div class="config-overlay-columns">
+          <div class="config-overlay-left" id="config-overlay-left">
+            <div class="config-file-row" data-file="DayzSPL.cfg">
+              <span class="config-file-name">DayzSPL.cfg</span>
+              <button class="config-restore-btn" title="Restore defaults">
+                <svg viewBox="0 0 40 40" fill="currentColor">
+                  <path d="M10 16.682l5.69 5.685 1.408-1.407-3.283-3.28h10.131c1.147 0 2.19.467 2.943 1.222a4.157 4.157 0 011.225 2.946 4.18 4.18 0 01-4.168 4.168h-5.628V28h5.522c3.387 0 6.16-2.77 6.16-6.157a6.117 6.117 0 00-1.81-4.343 6.143 6.143 0 00-4.35-1.805H13.815l3.283-3.285L15.69 11 10 16.682z"/>
+                </svg>
+              </button>
+            </div>
+            <div class="config-file-row" data-file="!DayzSPL.bat">
+              <span class="config-file-name">!DayzSPL.bat</span>
+              <button class="config-restore-btn" title="Restore defaults">
+                <svg viewBox="0 0 40 40" fill="currentColor">
+                  <path d="M10 16.682l5.69 5.685 1.408-1.407-3.283-3.28h10.131c1.147 0 2.19.467 2.943 1.222a4.157 4.157 0 011.225 2.946 4.18 4.18 0 01-4.168 4.168h-5.628V28h5.522c3.387 0 6.16-2.77 6.16-6.157a6.117 6.117 0 00-1.81-4.343 6.143 6.143 0 00-4.35-1.805H13.815l3.283-3.285L15.69 11 10 16.682z"/>
+                </svg>
+              </button>
+            </div>
+            <div class="config-file-row" data-file="!Dayz.bat">
+              <span class="config-file-name">!Dayz.bat</span>
+              <button class="config-restore-btn" title="Restore defaults">
+                <svg viewBox="0 0 40 40" fill="currentColor">
+                  <path d="M10 16.682l5.69 5.685 1.408-1.407-3.283-3.28h10.131c1.147 0 2.19.467 2.943 1.222a4.157 4.157 0 011.225 2.946 4.18 4.18 0 01-4.168 4.168h-5.628V28h5.522c3.387 0 6.16-2.77 6.16-6.157a6.117 6.117 0 00-1.81-4.343 6.143 6.143 0 00-4.35-1.805H13.815l3.283-3.285L15.69 11 10 16.682z"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+          <div class="config-overlay-right"></div>
+        </div>
+      </div>
+    </div>
     <script src="./renderer.js"></script>
   </body>
 </html>

@@ -41,6 +41,136 @@ document.getElementById("open-server-folder")?.addEventListener("click", () => {
   if (serverInstallPath) window.appInfo.openFolder(serverInstallPath);
 });
 
+let currentFilename = null;
+let originalContent = null;
+let hasSelectedFile = false;
+
+document.getElementById("options-gear-btn")?.addEventListener("click", async () => {
+  await window.appInfo.initTemplates();
+  document.getElementById("config-overlay")?.classList.remove("hidden");
+  if (!hasSelectedFile) {
+    const firstRow = document.querySelector(".config-file-row");
+    if (firstRow) firstRow.click();
+    hasSelectedFile = true;
+  }
+});
+
+document.getElementById("config-overlay-close")?.addEventListener("click", () => {
+  document.getElementById("config-overlay")?.classList.add("hidden");
+});
+
+document.getElementById("config-sidebar-toggle")?.addEventListener("click", () => {
+  document.getElementById("config-overlay-left")?.classList.toggle("collapsed");
+});
+
+document.getElementById("config-overlay")?.addEventListener("click", (e) => {
+  if (e.target === e.currentTarget) {
+    e.currentTarget.classList.add("hidden");
+  }
+});
+
+document.querySelector(".config-overlay-left")?.addEventListener("click", async (e) => {
+  const restoreBtn = e.target.closest(".config-restore-btn");
+  if (restoreBtn) {
+    const row = restoreBtn.closest(".config-file-row");
+    if (!row) return;
+    const filename = row.dataset.file;
+    const result = await window.appInfo.restoreTemplateDefaults(filename);
+    if (result.success) {
+      row.click();
+    }
+    return;
+  }
+
+  const row = e.target.closest(".config-file-row");
+  if (!row) return;
+
+  document.querySelectorAll(".config-file-row").forEach(r => r.classList.remove("active"));
+  row.classList.add("active");
+
+  currentFilename = row.dataset.file;
+  document.getElementById("config-filename-display").textContent = currentFilename;
+  const result = await window.appInfo.readTemplateFile(currentFilename);
+  const right = document.querySelector(".config-overlay-right");
+  if (!right) return;
+
+  if (result.success) {
+    const originalResult = await window.appInfo.readOriginalTemplateFile(currentFilename);
+    originalContent = originalResult.success ? originalResult.content : result.content;
+    const lines = result.content.split("\n");
+    const lineCount = lines.length;
+    const digits = String(lineCount).length;
+    const lineNumbers = lines.map((_, i) => String(i + 1).padStart(digits, " ")).join("\n");
+    right.innerHTML = `<div class="config-text-wrap"><pre class="config-line-numbers">${escapeHtml(lineNumbers)}</pre><pre class="config-text-viewer" contenteditable="true" spellcheck="false">${escapeHtml(result.content)}</pre></div>`;
+    right.querySelector(".config-text-viewer")?.addEventListener("input", onTextEdited);
+    // restore button visibility based on diff from original
+    const restoreBtn = row.querySelector(".config-restore-btn");
+    if (restoreBtn) restoreBtn.style.visibility = result.content !== originalContent ? "visible" : "hidden";
+  } else {
+    right.innerHTML = `<div class="config-text-error">Failed to load: ${escapeHtml(result.message)}</div>`;
+  }
+});
+
+function escapeHtml(text) {
+  const div = document.createElement("div");
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function onTextEdited() {
+  const viewer = document.querySelector(".config-text-viewer");
+  if (!viewer || !currentFilename) return;
+  const currentContent = viewer.textContent;
+  const row = document.querySelector(`.config-file-row[data-file="${currentFilename}"]`);
+  const restoreBtn = row?.querySelector(".config-restore-btn");
+  if (restoreBtn) {
+    restoreBtn.style.visibility = currentContent !== originalContent ? "visible" : "hidden";
+  }
+}
+
+async function doSave() {
+  if (!currentFilename) return;
+  const viewer = document.querySelector(".config-text-viewer");
+  if (!viewer) return;
+  const content = viewer.textContent;
+  const result = await window.appInfo.saveTemplateFile(currentFilename, content);
+  if (result.success) {
+    const restoreBtn = document.querySelector(`.config-file-row[data-file="${currentFilename}"]`)?.querySelector(".config-restore-btn");
+    if (restoreBtn) restoreBtn.style.visibility = content !== originalContent ? "visible" : "hidden";
+  }
+}
+
+document.getElementById("config-save-btn")?.addEventListener("click", doSave);
+
+function setBypassState(active) {
+  document.body.classList.toggle("bypass-active", active);
+  const btn = document.getElementById("config-bypass-btn");
+  if (btn) btn.classList.toggle("active", active);
+  updateButtonsState(isServerRunningLocal);
+}
+
+document.getElementById("config-bypass-btn")?.addEventListener("click", async () => {
+  const btn = document.getElementById("config-bypass-btn");
+  if (!btn) return;
+  const nowActive = !btn.classList.contains("active");
+  setBypassState(nowActive);
+  await window.appInfo.saveSetting("bypassLauncherOptions", nowActive);
+});
+
+(async () => {
+  const bypass = await window.appInfo.getSetting("bypassLauncherOptions");
+  if (bypass) {
+    setBypassState(true);
+  }
+})();
+
+document.addEventListener("keydown", (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+    e.preventDefault();
+    doSave();
+  }
+});
+
 document.getElementById("minimize")?.addEventListener("click", () => {
   window.appInfo?.minimize();
 });
@@ -954,7 +1084,8 @@ async function handleLaunch(isNewGame = false, skipCFCheck = true) {
   statusText.style.color = "";
   launchHadErrors = false;
   
-  const result = await window.appInfo.launchDayZ(serverResult.installPath, activeMap);
+  const bypassActive = document.body.classList.contains("bypass-active");
+  const result = await window.appInfo.launchDayZ(serverResult.installPath, activeMap, bypassActive);
    
   button.disabled = isServerRunningLocal;
   
@@ -987,6 +1118,13 @@ let newGameRowActive = false;
 let selectedSaveSlot = null;
 
 async function checkSelectedSaveContent() {
+  if (document.body.classList.contains("bypass-active")) {
+    if (continueBtn) {
+      continueBtn.disabled = false;
+      continueBtn.textContent = "Launch";
+    }
+    return;
+  }
   if (!continueBtn) return;
   if (!selectedSaveSlot) {
     continueBtn.disabled = true;
@@ -1054,10 +1192,30 @@ errorDialogCopy?.addEventListener("click", async () => {
   }, 1200);
 });
 
-document.querySelector(".action-button").addEventListener("click", () => {
-  addNewGameInputRow();
+document.querySelector(".action-button").addEventListener("click", async () => {
+  if (document.body.classList.contains("bypass-active")) {
+    const serverResult = await window.appInfo.scanForDayzServer();
+    if (!serverResult.found) {
+      alert("DayZ Server not found.");
+      return;
+    }
+    const cfgResult = await window.appInfo.readCfgMap(serverResult.installPath);
+    const missionFolder = cfgResult.success ? cfgResult.map : "";
+    if (!missionFolder) {
+      alert("Could not determine map from server config.");
+      return;
+    }
+    await window.appInfo.deleteServerStorage(serverResult.installPath, missionFolder);
+    handleLaunch(false, true);
+  } else {
+    addNewGameInputRow();
+  }
 });
 continueBtn?.addEventListener("click", async () => {
+  if (document.body.classList.contains("bypass-active")) {
+    handleLaunch(false, true);
+    return;
+  }
   if (!selectedSaveSlot) return;
   const hasContent = await window.appInfo.checkSaveContent(currentMap, selectedSaveSlot);
   if (!hasContent) {
@@ -1099,6 +1257,11 @@ function updateButtonsState(isServerRunning) {
   } else {
     newGameBtn.disabled = false;
     
+    if (document.body.classList.contains("bypass-active")) {
+      checkSelectedSaveContent();
+      return;
+    }
+
     const activeMap = document.querySelector(".map-option.active")?.dataset.map || "chernarus";
 
     if (currentMap === "custom") {
