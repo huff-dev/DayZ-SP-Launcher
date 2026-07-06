@@ -1219,6 +1219,13 @@ document.querySelector(".action-button").addEventListener("click", async () => {
       alert("Could not determine map from server config.");
       return;
     }
+    const bypassNewGameProceed = document.getElementById("bypass-newgame-proceed");
+    const bypassNewGameCancel = document.getElementById("bypass-newgame-cancel");
+    const bypassNewGameContainer = document.getElementById("bypass-newgame-confirm");
+    if (bypassNewGameProceed && bypassNewGameCancel && bypassNewGameContainer) {
+      const confirmed = await showConfirmDialog(bypassNewGameContainer, bypassNewGameProceed, bypassNewGameCancel);
+      if (!confirmed) return;
+    }
     await window.appInfo.deleteServerStorage(serverResult.installPath, missionFolder);
     handleLaunch(false, true);
   } else {
