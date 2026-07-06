@@ -1284,6 +1284,8 @@ input[type="checkbox"] {
   overflow-y: auto;
   white-space: nowrap;
   width: 120px;
+  display: flex;
+  flex-direction: column;
 }
 
 .config-overlay-right {

@@ -43,6 +43,7 @@ document.getElementById("open-server-folder")?.addEventListener("click", () => {
 
 let currentFilename = null;
 let originalContent = null;
+let savedContent = null;
 let hasSelectedFile = false;
 
 document.getElementById("options-gear-btn")?.addEventListener("click", async () => {
@@ -89,15 +90,15 @@ document.querySelector(".config-overlay-left")?.addEventListener("click", async 
   row.classList.add("active");
 
   currentFilename = row.dataset.file;
-  document.getElementById("config-filename-display").textContent = currentFilename;
   const result = await window.appInfo.readTemplateFile(currentFilename);
   const right = document.querySelector(".config-overlay-right");
   if (!right) return;
 
   if (result.success) {
     const originalResult = await window.appInfo.readOriginalTemplateFile(currentFilename);
-    originalContent = originalResult.success ? originalResult.content : result.content;
-    const lines = result.content.split("\n");
+    originalContent = (originalResult.success ? originalResult.content : result.content).replace(/\r\n/g, "\n");
+    savedContent = result.content.replace(/\r\n/g, "\n");
+    const lines = savedContent.split("\n");
     const lineCount = lines.length;
     const digits = String(lineCount).length;
     const lineNumbers = lines.map((_, i) => String(i + 1).padStart(digits, " ")).join("\n");
@@ -105,7 +106,8 @@ document.querySelector(".config-overlay-left")?.addEventListener("click", async 
     right.querySelector(".config-text-viewer")?.addEventListener("input", onTextEdited);
     // restore button visibility based on diff from original
     const restoreBtn = row.querySelector(".config-restore-btn");
-    if (restoreBtn) restoreBtn.style.visibility = result.content !== originalContent ? "visible" : "hidden";
+    if (restoreBtn) restoreBtn.style.visibility = savedContent !== originalContent ? "visible" : "hidden";
+    updateDirtyIndicator();
   } else {
     right.innerHTML = `<div class="config-text-error">Failed to load: ${escapeHtml(result.message)}</div>`;
   }
@@ -117,26 +119,38 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
+function updateDirtyIndicator() {
+  const display = document.getElementById("config-filename-display");
+  if (!display || !currentFilename) return;
+  const viewer = document.querySelector(".config-text-viewer");
+  const viewerText = viewer ? viewer.textContent.replace(/\r\n/g, "\n") : "";
+  const isDirty = viewer && viewerText !== savedContent.replace(/\r\n/g, "\n");
+  display.textContent = currentFilename + (isDirty ? "*" : "");
+}
+
 function onTextEdited() {
   const viewer = document.querySelector(".config-text-viewer");
   if (!viewer || !currentFilename) return;
-  const currentContent = viewer.textContent;
+  const currentContent = viewer.textContent.replace(/\r\n/g, "\n");
   const row = document.querySelector(`.config-file-row[data-file="${currentFilename}"]`);
   const restoreBtn = row?.querySelector(".config-restore-btn");
   if (restoreBtn) {
-    restoreBtn.style.visibility = currentContent !== originalContent ? "visible" : "hidden";
+    restoreBtn.style.visibility = currentContent !== originalContent.replace(/\r\n/g, "\n") ? "visible" : "hidden";
   }
+  updateDirtyIndicator();
 }
 
 async function doSave() {
   if (!currentFilename) return;
   const viewer = document.querySelector(".config-text-viewer");
   if (!viewer) return;
-  const content = viewer.textContent;
+  const content = viewer.textContent.replace(/\r\n/g, "\n");
   const result = await window.appInfo.saveTemplateFile(currentFilename, content);
   if (result.success) {
+    savedContent = content;
     const restoreBtn = document.querySelector(`.config-file-row[data-file="${currentFilename}"]`)?.querySelector(".config-restore-btn");
-    if (restoreBtn) restoreBtn.style.visibility = content !== originalContent ? "visible" : "hidden";
+    if (restoreBtn) restoreBtn.style.visibility = content !== originalContent.replace(/\r\n/g, "\n") ? "visible" : "hidden";
+    updateDirtyIndicator();
   }
 }
 
