@@ -103,7 +103,13 @@ document.querySelector(".config-overlay-left")?.addEventListener("click", async 
     const digits = String(lineCount).length;
     const lineNumbers = lines.map((_, i) => String(i + 1).padStart(digits, " ")).join("\n");
     right.innerHTML = `<div class="config-text-wrap"><pre class="config-line-numbers">${escapeHtml(lineNumbers)}</pre><pre class="config-text-viewer" contenteditable="true" spellcheck="false">${escapeHtml(result.content)}</pre></div>`;
-    right.querySelector(".config-text-viewer")?.addEventListener("input", onTextEdited);
+    const viewerEl = right.querySelector(".config-text-viewer");
+    viewerEl?.addEventListener("input", onTextEdited);
+    viewerEl?.addEventListener("paste", (e) => {
+      e.preventDefault();
+      const text = (e.clipboardData || window.clipboardData).getData("text/plain");
+      document.execCommand("insertText", false, text);
+    });
     // restore button visibility based on diff from original
     const restoreBtn = row.querySelector(".config-restore-btn");
     if (restoreBtn) restoreBtn.style.visibility = savedContent !== originalContent ? "visible" : "hidden";
@@ -119,19 +125,23 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
+function getViewerText() {
+  const viewer = document.querySelector(".config-text-viewer");
+  if (!viewer) return "";
+  return viewer.innerText;
+}
+
 function updateDirtyIndicator() {
   const display = document.getElementById("config-filename-display");
   if (!display || !currentFilename) return;
-  const viewer = document.querySelector(".config-text-viewer");
-  const viewerText = viewer ? viewer.textContent.replace(/\r\n/g, "\n") : "";
-  const isDirty = viewer && viewerText !== savedContent.replace(/\r\n/g, "\n");
+  const viewerText = getViewerText().replace(/\r\n/g, "\n");
+  const isDirty = viewerText !== savedContent.replace(/\r\n/g, "\n");
   display.textContent = currentFilename + (isDirty ? "*" : "");
 }
 
 function onTextEdited() {
-  const viewer = document.querySelector(".config-text-viewer");
-  if (!viewer || !currentFilename) return;
-  const currentContent = viewer.textContent.replace(/\r\n/g, "\n");
+  if (!currentFilename) return;
+  const currentContent = getViewerText().replace(/\r\n/g, "\n");
   const row = document.querySelector(`.config-file-row[data-file="${currentFilename}"]`);
   const restoreBtn = row?.querySelector(".config-restore-btn");
   if (restoreBtn) {
@@ -142,9 +152,7 @@ function onTextEdited() {
 
 async function doSave() {
   if (!currentFilename) return;
-  const viewer = document.querySelector(".config-text-viewer");
-  if (!viewer) return;
-  const content = viewer.textContent.replace(/\r\n/g, "\n");
+  const content = getViewerText().replace(/\r\n/g, "\n");
   const result = await window.appInfo.saveTemplateFile(currentFilename, content);
   if (result.success) {
     savedContent = content;
@@ -1279,6 +1287,9 @@ function updateButtonsState(isServerRunning) {
     newGameBtn.disabled = false;
     
     if (document.body.classList.contains("bypass-active")) {
+      if (statusText.textContent === "DayZ server is running") {
+        statusText.textContent = "";
+      }
       checkSelectedSaveContent();
       return;
     }

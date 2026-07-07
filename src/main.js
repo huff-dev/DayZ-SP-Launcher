@@ -1577,7 +1577,7 @@ async function generateServerConfig(dayzServerPath, map, envFolder) {
       `template="${selectedTemplate}";`
     );
 
-    await fsp.writeFile(destConfigPath, configContent);
+    await fsp.writeFile(destConfigPath, configContent.replace(/\n/g, "\r\n"));
     console.log(`Generated server config for ${map} at ${destConfigPath}`);
   } catch (error) {
     console.error("Failed to generate server config:", error);
@@ -1611,7 +1611,7 @@ async function generateServerBatch(dayzServerPath, enabledMods) {
       `"${exePath}"`
     );
 
-    await fsp.writeFile(destBatchPath, batchContent);
+    await fsp.writeFile(destBatchPath, batchContent.replace(/\n/g, "\r\n"));
     console.log(`Generated server batch with ${enabledMods.length} mods at ${destBatchPath}`);
   } catch (error) {
     console.error("Failed to generate server batch:", error);
@@ -1637,7 +1637,7 @@ async function generateGameBatch(dayzGamePath, enabledMods) {
       `-mod=${formattedMods}`
     );
 
-    await fsp.writeFile(destBatchPath, batchContent);
+    await fsp.writeFile(destBatchPath, batchContent.replace(/\n/g, "\r\n"));
     console.log(`Generated game batch with ${enabledMods.length} mods at ${destBatchPath}`);
   } catch (error) {
     console.error("Failed to generate game batch:", error);
@@ -1774,7 +1774,7 @@ ipcMain.handle("dayz:launch", async (_event, dayzServerPath, map, bypass) => {
         : path.join(__dirname, "scripts", "!DayzSPL.bat");
       let batContent = await fsp.readFile(batSrc, "utf8");
       batContent = batContent.replace(/"DayZServer_x64\.exe"/g, `"${path.join(dayzServerPath, "DayZServer_x64.exe")}"`);
-      await fsp.writeFile(path.join(dayzServerPath, "!DayzSPL.bat"), batContent);
+      await fsp.writeFile(path.join(dayzServerPath, "!DayzSPL.bat"), batContent.replace(/\n/g, "\r\n"));
       const gameBatSrc = (await pathExists(path.join(getTemplatesUserDir(), "!Dayz.bat")))
         ? path.join(getTemplatesUserDir(), "!Dayz.bat")
         : path.join(__dirname, "scripts", "!Dayz.bat");
@@ -1999,7 +1999,7 @@ ipcMain.handle("tpl:read", async (_event, filename) => {
 ipcMain.handle("tpl:save", async (_event, filename, content) => {
   const userPath = path.join(getTemplatesUserDir(), filename);
   try {
-    await fsp.writeFile(userPath, content, "utf8");
+    await fsp.writeFile(userPath, content.replace(/\n/g, "\r\n"), "utf8");
     return { success: true };
   } catch (error) {
     return { success: false, message: error.message };
